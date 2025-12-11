@@ -1,0 +1,93 @@
+---
+title: "Encoder/Decoder"
+category: "best-practices"
+description: "Complete guide on encoding: Base64, Base64URL, Hex, URL encoding, security and use cases"
+coverImage: "/guides/encoder.jpg"
+date: "2024-03-06"
+---
+
+# Encoder/Decoder
+
+Encoding is the process of converting data from one format to another to facilitate transmission or storage. Unlike encryption, encoding is not secure and can be easily reversed.
+
+## Base64
+
+### Principle
+
+Binary to text encoding using 64 characters (A-Z, a-z, 0-9, +, /). Each group of 3 bytes is encoded into 4 characters.
+
+### Usage
+
+- Encoding binary data in JSON/XML
+- File transfer via email (MIME)
+- Storing data in URLs (with caution)
+
+### Example
+
+```
+Text: "Hello"
+Base64: "SGVsbG8="
+```
+
+### Security
+
+**Important:** Base64 is NOT encryption. It's a simple format conversion, easily decodable.
+
+## Base64URL
+
+Base64 variant for URLs:
+- Replaces `+` with `-`
+- Replaces `/` with `_`
+- Removes padding `=`
+
+Used in JWTs and URL tokens.
+
+## Hexadecimal (Hex)
+
+Representation of binary data in base 16. Each byte is represented by 2 hex characters (0-9, A-F).
+
+### Usage
+
+- Display of cryptographic hashes
+- Representation of keys and IVs
+- Debug and binary data analysis
+
+## URL Encoding
+
+Encoding of special characters in URLs. Uses format `%XX` where XX is the hexadecimal code.
+
+### Encoded Characters
+
+- Space: `%20` or `+`
+- `&`: `%26`
+- `=`: `%3D`
+
+## Vulnerabilities
+
+### Injection via Encoding
+
+Attackers can use encoding to bypass security filters.
+
+**Example:**
+```
+<script> → %3Cscript%3E (URL encoding)
+```
+
+### Double Encoding
+
+Some systems decode multiple times, allowing double encoding to bypass protections.
+
+## Best Practices
+
+- Never use encoding as security
+- Validate and sanitize all decoded inputs
+- Use the right type of encoding according to context
+- Be aware of injection risks
+
+## Conclusion
+
+Encoding is a useful tool for data transmission, but should never be confused with encryption. Understanding different encoding types and their vulnerabilities is essential for security.
+
+
+
+

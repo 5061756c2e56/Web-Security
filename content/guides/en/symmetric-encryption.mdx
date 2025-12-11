@@ -1,0 +1,59 @@
+---
+title: "Symmetric Encryption"
+category: "cryptography"
+description: "Guide on symmetric encryption algorithms: AES, ChaCha20, comparisons and security"
+coverImage: "/guides/symmetric.jpg"
+date: "2024-03-19"
+---
+
+# Symmetric Encryption
+
+Symmetric encryption uses the same key to encrypt and decrypt. Fast and efficient for large amounts of data.
+
+## AES (Advanced Encryption Standard)
+
+Current standard, adopted by NIST in 2001. Replaces DES and 3DES.
+
+### Characteristics
+
+- Key sizes: 128, 192, 256 bits
+- Block size: 128 bits
+- Security: Resistant to all known attacks
+- Performance: Hardware acceleration available
+
+### Recommendations
+
+- **AES-128**: Sufficient for most cases
+- **AES-256**: For maximum security
+
+## ChaCha20
+
+Modern stream cipher algorithm, alternative to AES.
+
+### Advantages
+
+- Faster on processors without AES acceleration
+- Resistant to side-channel attacks
+- Used in TLS 1.3
+
+## Comparison
+
+| Algorithm | Speed | Security | Recommendation |
+|-----------|-------|----------|----------------|
+| AES-256 | Fast (with acceleration) | Excellent | Standard |
+| ChaCha20 | Fast (without acceleration) | Excellent | Modern alternative |
+
+## Best Practices
+
+- Use AES-256 or ChaCha20
+- Choose appropriate mode (GCM recommended)
+- Generate keys with CSPRNG
+- Never reuse keys
+
+## Conclusion
+
+AES and ChaCha20 are the recommended symmetric algorithms. Choice depends on performance and available hardware.
+
+
+
+

@@ -1,0 +1,66 @@
+---
+title: "SSL/TLS Certificates"
+category: "web-security"
+description: "Guide on X.509 certificates: structure, trust chain, validation and vulnerabilities"
+coverImage: "/guides/certificates.jpg"
+date: "2024-03-12"
+---
+
+# SSL/TLS Certificates
+
+X.509 certificates are used to authenticate servers and encrypt communications via TLS/SSL.
+
+## X.509 Structure
+
+### Components
+
+- **Subject**: Identified entity (domain name)
+- **Issuer**: Issuing certification authority
+- **Public Key**: Subject's public key
+- **Signature**: Issuer's signature
+- **Validity**: Validity period
+
+## Trust Chain
+
+### Certification Authorities (CA)
+
+Root CAs are pre-installed in browsers and operating systems. They sign server certificates.
+
+### Validation
+
+1. Verify certificate signature
+2. Verify chain up to a trusted root CA
+3. Verify validity (dates)
+4. Verify domain name (CN, SAN)
+
+## Certificate Types
+
+- **DV (Domain Validated)**: Domain validation only
+- **OV (Organization Validated)**: Organization validation
+- **EV (Extended Validation)**: Extended validation (green bar)
+
+## Vulnerabilities
+
+### Certificate Pinning
+
+Pin certificates to prevent MITM attacks. Risk if certificate expires.
+
+### MITM (Man-in-the-Middle)
+
+Attacker intercepting communications. Protection: verify certificate chain.
+
+## Best Practices
+
+- Use valid certificates
+- Renew before expiration
+- Use wildcard certificates with caution
+- Implement HSTS
+- Monitor expired certificates
+
+## Conclusion
+
+Certificates are essential for web security. Proper management and appropriate validation are crucial.
+
+
+
+

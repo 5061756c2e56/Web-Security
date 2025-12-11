@@ -1,0 +1,347 @@
+---
+title: "Chiffrement symétrique - Guide complet"
+category: "cryptography"
+description: "Guide expert sur les algorithmes de chiffrement symétrique : AES, ChaCha20, comparaisons détaillées, modes de chiffrement, sécurité, performances, implémentations et bonnes pratiques."
+coverImage: "/guides/symmetric.jpg"
+date: "2024-03-19"
+difficulty: "avancé"
+readingTime: "45 min"
+prerequisites: ["Cryptographie", "Algorithmes", "Sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Chiffrement symétrique - Guide complet
+
+Le chiffrement symétrique utilise la même clé pour chiffrer et déchiffrer les données. Rapide et efficace pour de grandes quantités de données, il constitue la base de la plupart des systèmes cryptographiques modernes.
+
+## Introduction
+
+Dans le chiffrement symétrique, la même clé secrète est utilisée pour le chiffrement et le déchiffrement. Cette approche est :
+
+- **Rapide** : Efficace pour de grandes quantités de données
+- **Efficace** : Moins coûteux en ressources que le chiffrement asymétrique
+- **Sécurisé** : Avec des algorithmes modernes et des clés appropriées
+
+**Limitations :**
+- Nécessite un partage sécurisé de la clé
+- Gestion complexe des clés dans un environnement multi-utilisateurs
+
+## AES (Advanced Encryption Standard)
+
+Standard actuel, adopté par le NIST en 2001. Remplace DES et 3DES.
+
+### Caractéristiques
+
+- **Tailles de clés** : 128, 192, 256 bits
+- **Taille de bloc** : 128 bits
+- **Sécurité** : Résistant à toutes les attaques connues
+- **Performance** : Accélération matérielle disponible (AES-NI)
+
+### Structure
+
+AES opère sur des blocs de 128 bits (16 bytes) et utilise une structure de substitution-permutation.
+
+```
+Plaintext (128 bits)
+    ↓
+AddRoundKey
+    ↓
+[Round 1-9/11/13]
+    ├─ SubBytes
+    ├─ ShiftRows
+    ├─ MixColumns
+    └─ AddRoundKey
+    ↓
+[Final Round]
+    ├─ SubBytes
+    ├─ ShiftRows
+    └─ AddRoundKey
+    ↓
+Ciphertext (128 bits)
+```
+
+### Tailles de clés
+
+#### AES-128
+
+- Clé de 128 bits
+- 10 rounds
+- Sécurité suffisante pour la plupart des cas
+- Recommandé pour la plupart des applications
+
+#### AES-192
+
+- Clé de 192 bits
+- 12 rounds
+- Sécurité renforcée
+- Utilisé pour des applications sensibles
+
+#### AES-256
+
+- Clé de 256 bits
+- 14 rounds
+- Niveau de sécurité maximal
+- Recommandé pour les données très sensibles
+
+### Sécurité
+
+AES est considéré comme sécurisé contre toutes les attaques connues, y compris les attaques par force brute. Même avec des ordinateurs quantiques, AES-256 reste sécurisé.
+
+### Implémentation
+
+```javascript
+const crypto = require('crypto');
+
+class AESEncryption {
+    constructor(keySize = 256) {
+        this.keySize = keySize;
+        this.algorithm = `aes-${keySize}-gcm`;
+    }
+    
+    generateKey() {
+        return crypto.randomBytes(this.keySize / 8);
+    }
+    
+    encrypt(plaintext, key) {
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv(this.algorithm, key, iv);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(plaintext, 'utf8'),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            iv: iv.toString('hex'),
+            encrypted: encrypted.toString('hex'),
+            authTag: authTag.toString('hex')
+        };
+    }
+    
+    decrypt(encryptedData, key) {
+        const iv = Buffer.from(encryptedData.iv, 'hex');
+        const encrypted = Buffer.from(encryptedData.encrypted, 'hex');
+        const authTag = Buffer.from(encryptedData.authTag, 'hex');
+        
+        const decipher = crypto.createDecipheriv(this.algorithm, key, iv);
+        decipher.setAuthTag(authTag);
+        
+        const decrypted = Buffer.concat([
+            decipher.update(encrypted),
+            decipher.final()
+        ]);
+        
+        return decrypted.toString('utf8');
+    }
+}
+```
+
+## ChaCha20
+
+Algorithme moderne de chiffrement de flux, alternative à AES.
+
+### Caractéristiques
+
+- **Taille de clé** : 256 bits
+- **Taille de nonce** : 96 bits
+- **Type** : Chiffrement de flux
+- **Performance** : Plus rapide sur processeurs sans accélération AES
+
+### Avantages
+
+- Plus rapide sur processeurs sans accélération AES
+- Résistant aux attaques par canal auxiliaire
+- Utilisé dans TLS 1.3
+- Implémentation simple
+- Pas de tables de substitution (résistant aux attaques par cache)
+
+### Structure
+
+ChaCha20 utilise une fonction de hachage (ChaCha) pour générer un flux de clés.
+
+```
+Key (256 bits) + Nonce (96 bits) + Counter (32 bits)
+    ↓
+ChaCha function (20 rounds)
+    ↓
+Key stream
+    ↓
+XOR with plaintext
+    ↓
+Ciphertext
+```
+
+### Implémentation
+
+```javascript
+const crypto = require('crypto');
+
+class ChaCha20Encryption {
+    encrypt(plaintext, key, nonce) {
+        const cipher = crypto.createCipheriv('chacha20-poly1305', key, nonce);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(plaintext, 'utf8'),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            encrypted: encrypted.toString('hex'),
+            authTag: authTag.toString('hex')
+        };
+    }
+    
+    decrypt(encryptedData, key, nonce) {
+        const encrypted = Buffer.from(encryptedData.encrypted, 'hex');
+        const authTag = Buffer.from(encryptedData.authTag, 'hex');
+        
+        const decipher = crypto.createDecipheriv('chacha20-poly1305', key, nonce);
+        decipher.setAuthTag(authTag);
+        
+        const decrypted = Buffer.concat([
+            decipher.update(encrypted),
+            decipher.final()
+        ]);
+        
+        return decrypted.toString('utf8');
+    }
+}
+```
+
+## Comparaison détaillée
+
+### AES vs ChaCha20
+
+| Caractéristique | AES-256 | ChaCha20 |
+|-----------------|---------|----------|
+| Type | Bloc | Flux |
+| Taille de clé | 256 bits | 256 bits |
+| Performance (avec AES-NI) | Excellente | Bonne |
+| Performance (sans AES-NI) | Bonne | Excellente |
+| Résistance canal auxiliaire | Moyenne | Élevée |
+| Utilisation TLS | TLS 1.2+ | TLS 1.3 |
+| Standardisation | NIST | IETF |
+
+### Recommandations
+
+- **Serveurs modernes avec AES-NI** : AES-256-GCM
+- **Processeurs sans AES-NI** : ChaCha20-Poly1305
+- **Applications mobiles** : ChaCha20-Poly1305 (meilleure performance)
+- **Applications critiques** : Les deux sont excellents
+
+## Modes de chiffrement
+
+### GCM (Galois/Counter Mode)
+
+Mode authentifié recommandé pour AES.
+
+**Avantages :**
+- Confidentialité ET intégrité
+- Performant
+- Permet le chiffrement parallèle
+- Standard moderne
+
+```javascript
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+cipher.setAAD(additionalData);
+const encrypted = cipher.update(plaintext, 'utf8');
+cipher.final();
+const authTag = cipher.getAuthTag();
+```
+
+### CBC (Cipher Block Chaining)
+
+Mode classique, nécessite un MAC séparé.
+
+**Caractéristiques :**
+- Nécessite un IV unique et aléatoire
+- Séquentiel (pas de parallélisation)
+- Vulnérable aux attaques de padding oracle
+
+### CTR (Counter)
+
+Transforme le chiffrement par blocs en chiffrement de flux.
+
+**Avantages :**
+- Permet le chiffrement parallèle
+- Accès aléatoire aux données
+- Pas de padding nécessaire
+
+## Sécurité
+
+### Résistance aux attaques
+
+#### Force brute
+
+AES-256 et ChaCha20 sont résistants aux attaques par force brute :
+- AES-256 : 2^256 possibilités
+- ChaCha20 : 2^256 possibilités
+
+#### Attaques par canal auxiliaire
+
+- **AES** : Vulnérable aux attaques par cache (mitigé par AES-NI)
+- **ChaCha20** : Résistant aux attaques par canal auxiliaire
+
+#### Attaques quantiques
+
+- **AES-256** : Résistant (algorithme symétrique)
+- **ChaCha20** : Résistant
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser AES-256 ou ChaCha20
+- [ ] Choisir le mode approprié (GCM recommandé)
+- [ ] Générer des clés avec CSPRNG
+- [ ] Ne jamais réutiliser les clés
+- [ ] Utiliser des IV/nonces uniques et aléatoires
+- [ ] Vérifier les tags d'authentification (GCM)
+- [ ] Stocker les clés de manière sécurisée
+- [ ] Implémenter la rotation des clés
+- [ ] Utiliser des bibliothèques cryptographiques réputées
+- [ ] Tester les implémentations
+- [ ] Documenter les choix cryptographiques
+- [ ] Monitorer les performances
+- [ ] Former l'équipe sur le chiffrement symétrique
+
+### Gestion des clés
+
+```javascript
+class KeyManagement {
+    constructor(keyVault) {
+        this.keyVault = keyVault;
+    }
+    
+    async generateKey(keyId) {
+        const key = crypto.randomBytes(32);
+        await this.keyVault.storeKey(keyId, key);
+        return keyId;
+    }
+    
+    async getKey(keyId) {
+        return await this.keyVault.getKey(keyId);
+    }
+    
+    async rotateKey(keyId) {
+        const newKey = crypto.randomBytes(32);
+        await this.keyVault.rotateKey(keyId, newKey);
+        return newKey;
+    }
+}
+```
+
+## Conclusion
+
+AES et ChaCha20 sont les algorithmes symétriques recommandés. Le choix dépend des performances, du matériel disponible, et des besoins de sécurité. AES-256-GCM est le standard pour la plupart des applications, tandis que ChaCha20-Poly1305 offre une excellente alternative, particulièrement sur les processeurs sans accélération AES.
+
+## Références techniques
+
+- [NIST FIPS 197 - Advanced Encryption Standard](https://csrc.nist.gov/publications/detail/fips/197/final)
+- [RFC 8439 - ChaCha20 and Poly1305](https://tools.ietf.org/html/rfc8439)
+- [NIST SP 800-38A - Block Cipher Modes](https://csrc.nist.gov/publications/detail/sp/800-38a/final)
+- [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)

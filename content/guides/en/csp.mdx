@@ -1,0 +1,78 @@
+---
+title: "Content Security Policy (CSP)"
+category: "web-security"
+description: "Guide on CSP: configuration, directives, bypass techniques and best practices"
+coverImage: "/guides/csp.jpg"
+date: "2024-03-18"
+---
+
+# Content Security Policy (CSP)
+
+CSP is a security mechanism that allows specifying which resources a browser can load, reducing XSS and code injection risks.
+
+## Main Directives
+
+### default-src
+
+Default source for all unspecified directives.
+
+```
+Content-Security-Policy: default-src 'self'
+```
+
+### script-src
+
+Controls JavaScript execution.
+
+```
+script-src 'self' 'unsafe-inline'
+```
+
+### style-src
+
+Controls CSS stylesheets.
+
+### img-src
+
+Controls image loading.
+
+## Authorized Sources
+
+- `'self'`: Same origin
+- `'unsafe-inline'`: Inline code (avoid)
+- `'unsafe-eval'`: eval() (avoid)
+- `https:`: All HTTPS URLs
+- Specific domain: `https://example.com`
+
+## Bypass Techniques
+
+### Nonces
+
+Use nonces to authorize specific inline code:
+
+```
+script-src 'nonce-abc123'
+```
+
+### Hashes
+
+Use hashes to authorize specific scripts:
+
+```
+script-src 'sha256-hash'
+```
+
+## Best Practices
+
+- Avoid `'unsafe-inline'` and `'unsafe-eval'`
+- Use nonces or hashes for necessary inline code
+- Implement in report-only mode first
+- Regularly test configuration
+
+## Conclusion
+
+CSP is a powerful tool to reduce XSS risks. Strict configuration significantly improves security.
+
+
+
+

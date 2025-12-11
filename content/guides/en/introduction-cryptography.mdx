@@ -1,0 +1,119 @@
+---
+title: "Introduction to Cryptography"
+category: "cryptography"
+description: "Complete guide on the basics of modern cryptography, algorithms, encryption modes and practical applications"
+coverImage: "/guides/crypto-intro.jpg"
+date: "2024-01-15"
+---
+
+# Introduction to Cryptography
+
+Cryptography is the art and science of protecting information by transforming it into an unreadable format for those who do not possess the decryption key. It forms the foundation of modern information security.
+
+## What is Cryptography?
+
+Modern cryptography uses complex mathematical algorithms to guarantee four fundamental properties:
+
+- **Confidentiality**: Ensure that only authorized people can read the data
+- **Integrity**: Verify that data has not been modified during transmission or storage
+- **Authentication**: Confirm the identity of the sender or system
+- **Non-repudiation**: Prevent someone from denying having sent a message or performed an action
+
+## Types of Cryptography
+
+### Symmetric Cryptography
+
+In symmetric cryptography, the same secret key is used to encrypt and decrypt data. This approach is fast and efficient for large amounts of data, but requires a secure way to share the key between parties.
+
+**Characteristics:**
+- High encryption/decryption speed
+- Efficient for large data volumes
+- Requires a secure channel for key exchange
+- Complex key management in multi-user environments
+
+**Common algorithms:**
+- **AES (Advanced Encryption Standard)**: Current standard, key sizes 128, 192 or 256 bits
+- **ChaCha20**: Modern alternative to AES, particularly efficient on processors without hardware acceleration
+- **Blowfish**: Older algorithm, now considered obsolete for new projects
+
+### Asymmetric Cryptography
+
+Asymmetric cryptography uses a pair of mathematically related keys: a public key to encrypt and a private key to decrypt. This approach solves the key sharing problem but is much slower than symmetric cryptography.
+
+**Characteristics:**
+- Solves the key distribution problem
+- Enables authentication and digital signatures
+- Much slower than symmetric cryptography
+- Generally used to encrypt small amounts of data (such as symmetric keys)
+
+**Common algorithms:**
+- **RSA**: The oldest and most widespread, based on factoring large numbers
+- **ECC (Elliptic Curve Cryptography)**: More efficient than RSA, shorter keys for the same security level
+- **Ed25519**: Specific ECC implementation, very performant and secure
+
+## Encryption Modes
+
+Encryption modes determine how a block cipher algorithm (like AES) processes data longer than a block.
+
+### ECB (Electronic Codebook)
+
+ECB mode encrypts each block independently. **Should be avoided** as it exposes patterns in the data.
+
+### CBC (Cipher Block Chaining)
+
+Each block is XORed with the previous encrypted block before encryption. Requires a unique and random initialization vector (IV).
+
+### CTR (Counter)
+
+Transforms block cipher into stream cipher. Allows parallel encryption and random access.
+
+### GCM (Galois/Counter Mode)
+
+Authenticated mode that provides both confidentiality and integrity. Recommended for new applications.
+
+## Key Management
+
+Key management is a critical aspect of cryptography:
+
+- **Generation**: Use cryptographically secure random generators (CSPRNG)
+- **Storage**: Protect private keys with appropriate encryption
+- **Rotation**: Regularly change keys to limit the impact of compromise
+- **Distribution**: Use secure channels to share keys
+
+## Cryptographic Attacks
+
+### Brute Force Attacks
+
+Attempt to guess a key by trying all possible combinations. Resistance depends on key length.
+
+### Side-Channel Attacks
+
+Exploitation of information revealed by physical implementation (execution time, power consumption, electromagnetic emissions).
+
+### Cryptanalysis Attacks
+
+Mathematical analysis of algorithms to find weaknesses. Modern algorithms are designed to resist these attacks.
+
+## Practical Applications
+
+Cryptography is used in many areas:
+
+1. **Secure communication**: HTTPS, VPN, encrypted messaging (Signal, WhatsApp)
+2. **Data storage**: Disk encryption (BitLocker, FileVault), encrypted databases
+3. **Authentication**: SSL/TLS certificates, digital signatures, public key authentication
+4. **Blockchain**: Proof of work, transaction signatures, cryptographic hashing
+5. **Digital identity**: Electronic passports, smart cards, biometric authentication
+
+## Best Practices
+
+- Use modern, well-tested algorithms (AES-256, ChaCha20, RSA-2048 minimum, ECC-256)
+- Always use unique and random IVs/nonces
+- Prefer authenticated modes (GCM, CCM) to guarantee integrity
+- Never reuse keys or IVs
+- Use reputable cryptographic libraries rather than implementing yourself
+- Validate and sanitize all inputs before encryption
+- Store keys securely (vaults, HSM)
+
+## Conclusion
+
+Cryptography is essential to protect our data in the modern digital world. Understanding its basic principles, available algorithms, and implementation best practices is crucial for anyone working in cybersecurity. Implementation errors are often more dangerous than weaknesses in the algorithms themselves.

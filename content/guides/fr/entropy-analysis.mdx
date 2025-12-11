@@ -1,0 +1,392 @@
+---
+title: "Analyse d'entropie - Guide complet"
+category: "best-practices"
+description: "Guide expert sur l'analyse d'entropie : calcul mathématique, métriques de force, entropie de Shannon, attaques par dictionnaire, outils d'analyse et bonnes pratiques."
+coverImage: "/guides/entropy.jpg"
+date: "2024-03-11"
+difficulty: "avancé"
+readingTime: "40 min"
+prerequisites: ["Mathématiques", "Cryptographie", "Sécurité des mots de passe"]
+lastUpdated: "2024-12-19"
+---
+
+# Analyse d'entropie - Guide complet
+
+L'entropie mesure l'imprévisibilité d'un mot de passe ou d'une clé. L'analyse d'entropie permet d'évaluer objectivement la force réelle d'un mot de passe et d'identifier les faiblesses qui ne sont pas évidentes à première vue.
+
+## Introduction
+
+L'entropie est un concept issu de la théorie de l'information de Shannon. En sécurité, elle mesure la quantité d'information aléatoire contenue dans un secret, ce qui détermine la difficulté de le deviner par force brute.
+
+**Définition :** L'entropie H d'une variable aléatoire X est :
+
+```
+H(X) = -Σ P(x) × log₂(P(x))
+```
+
+Où P(x) est la probabilité de chaque valeur possible.
+
+## Calcul d'entropie
+
+### Entropie théorique (maximale)
+
+L'entropie maximale est atteinte quand tous les caractères sont équiprobables.
+
+**Formule :** H = log₂(N^L)
+
+Où :
+- N = taille de l'alphabet
+- L = longueur
+
+### Exemple
+
+```javascript
+function calculateTheoreticalEntropy(length, alphabetSize) {
+    return length * Math.log2(alphabetSize);
+}
+
+// Mot de passe de 12 caractères avec alphabet de 94 caractères
+const entropy = calculateTheoreticalEntropy(12, 94);
+console.log(entropy); // ~78.5 bits
+```
+
+### Entropie réelle (de Shannon)
+
+L'entropie réelle prend en compte la distribution des caractères.
+
+```javascript
+function calculateShannonEntropy(text) {
+    const frequencies = {};
+    
+    for (const char of text) {
+        frequencies[char] = (frequencies[char] || 0) + 1;
+    }
+    
+    let entropy = 0;
+    const length = text.length;
+    
+    for (const count of Object.values(frequencies)) {
+        const probability = count / length;
+        entropy -= probability * Math.log2(probability);
+    }
+    
+    return entropy * length;
+}
+
+// Exemple
+const password1 = "aaaaaaaaaaaa"; // Répétition
+const password2 = "aB3$kL9#mN2@"; // Varié
+
+console.log(calculateShannonEntropy(password1)); // ~0 bits (prévisible)
+console.log(calculateShannonEntropy(password2)); // ~78 bits (bon)
+```
+
+## Métriques de force
+
+### Classification par entropie
+
+| Entropie (bits) | Force | Description |
+|-----------------|-------|-------------|
+| < 28 | Très faible | Devinable en quelques secondes |
+| 28-35 | Faible | Devinable en quelques minutes |
+| 36-59 | Moyen | Devinable en quelques heures/jours |
+| 60-127 | Fort | Devinable en années/siècles |
+| 128+ | Très fort | Pratiquement inviolable |
+
+### Exemples concrets
+
+```javascript
+const examples = [
+    { password: "password", entropy: 18, strength: "Très faible" },
+    { password: "Password123", entropy: 44, strength: "Moyen" },
+    { password: "P@ssw0rd123!", entropy: 65, strength: "Fort" },
+    { password: "Tr0ub@dor&3", entropy: 70, strength: "Fort" },
+    { password: "correct horse battery staple", entropy: 104, strength: "Très fort" }
+];
+```
+
+## Entropie par type de caractère
+
+### Alphabets et leurs tailles
+
+```javascript
+const alphabets = {
+    lowercase: 26,      // a-z
+    uppercase: 26,      // A-Z
+    digits: 10,         // 0-9
+    special: 32,        // !@#$%^&*()_+-=[]{}|;:,.<>?
+    alphanumeric: 62,   // a-z, A-Z, 0-9
+    full: 94            // Tous les caractères ASCII imprimables
+};
+
+function calculateAlphabetSize(password) {
+    let size = 0;
+    if (/[a-z]/.test(password)) size += 26;
+    if (/[A-Z]/.test(password)) size += 26;
+    if (/[0-9]/.test(password)) size += 10;
+    if (/[^a-zA-Z0-9]/.test(password)) size += 32;
+    return size;
+}
+```
+
+### Calcul d'entropie par alphabet
+
+```javascript
+function calculateEntropyByAlphabet(password) {
+    const alphabetSize = calculateAlphabetSize(password);
+    const length = password.length;
+    return length * Math.log2(alphabetSize);
+}
+```
+
+## Attaques par dictionnaire
+
+Les mots de passe basés sur des mots du dictionnaire ont une entropie effective beaucoup plus faible que leur entropie théorique.
+
+### Réduction d'entropie
+
+```javascript
+function calculateEffectiveEntropy(password) {
+    const words = password.toLowerCase().split(/[^a-z]+/);
+    const dictionarySize = 10000; // Taille typique d'un dictionnaire
+    
+    if (words.length === 1 && words[0].length > 3) {
+        // Probablement un mot du dictionnaire
+        return Math.log2(dictionarySize);
+    }
+    
+    // Sinon, utiliser l'entropie théorique
+    return calculateTheoreticalEntropy(password.length, 94);
+}
+
+// Exemple
+const password1 = "password"; // Mot du dictionnaire
+const password2 = "xK9$mP2#"; // Aléatoire
+
+console.log(calculateEffectiveEntropy(password1)); // ~13 bits
+console.log(calculateEffectiveEntropy(password2)); // ~48 bits
+```
+
+### Patterns communs
+
+Les patterns réduisent significativement l'entropie :
+
+```javascript
+const patterns = {
+    sequential: ["12345", "abcde", "qwerty"],
+    repeated: ["aaaa", "1111"],
+    keyboard: ["qwerty", "asdfgh"],
+    dates: ["01011990", "19900101"],
+    names: ["john", "mary", "admin"]
+};
+
+function detectPatterns(password) {
+    const detected = [];
+    
+    for (const [type, examples] of Object.entries(patterns)) {
+        for (const pattern of examples) {
+            if (password.toLowerCase().includes(pattern)) {
+                detected.push(type);
+                break;
+            }
+        }
+    }
+    
+    return detected;
+}
+```
+
+## Outils d'analyse
+
+### zxcvbn
+
+Bibliothèque de test de force de mot de passe développée par Dropbox.
+
+```javascript
+const zxcvbn = require('zxcvbn');
+
+function analyzePassword(password) {
+    const result = zxcvbn(password);
+    
+    return {
+        score: result.score, // 0-4
+        entropy: result.entropy,
+        crackTime: result.crack_times_seconds,
+        feedback: result.feedback,
+        guesses: result.guesses
+    };
+}
+
+// Exemple
+const analysis = analyzePassword("Tr0ub@dor&3");
+console.log(analysis);
+// {
+//   score: 3,
+//   entropy: 30.4,
+//   crackTime: { offline_slow_hashing_1e4_per_second: '2 hours' },
+//   feedback: { suggestions: [...], warning: '...' }
+// }
+```
+
+### Implémentation personnalisée
+
+```javascript
+class EntropyAnalyzer {
+    analyze(password) {
+        const analysis = {
+            length: password.length,
+            theoreticalEntropy: this.calculateTheoreticalEntropy(password),
+            shannonEntropy: this.calculateShannonEntropy(password),
+            effectiveEntropy: this.calculateEffectiveEntropy(password),
+            patterns: this.detectPatterns(password),
+            characterTypes: this.analyzeCharacterTypes(password),
+            strength: this.calculateStrength(password)
+        };
+        
+        return analysis;
+    }
+    
+    calculateTheoreticalEntropy(password) {
+        const alphabetSize = this.calculateAlphabetSize(password);
+        return password.length * Math.log2(alphabetSize);
+    }
+    
+    calculateShannonEntropy(password) {
+        const frequencies = {};
+        
+        for (const char of password) {
+            frequencies[char] = (frequencies[char] || 0) + 1;
+        }
+        
+        let entropy = 0;
+        const length = password.length;
+        
+        for (const count of Object.values(frequencies)) {
+            const probability = count / length;
+            entropy -= probability * Math.log2(probability);
+        }
+        
+        return entropy * length;
+    }
+    
+    calculateEffectiveEntropy(password) {
+        // Prendre le minimum entre théorique et Shannon
+        const theoretical = this.calculateTheoreticalEntropy(password);
+        const shannon = this.calculateShannonEntropy(password);
+        
+        // Réduire si patterns détectés
+        let reduction = 0;
+        const patterns = this.detectPatterns(password);
+        if (patterns.length > 0) {
+            reduction = 20; // Réduction significative
+        }
+        
+        return Math.min(theoretical, shannon) - reduction;
+    }
+    
+    calculateAlphabetSize(password) {
+        let size = 0;
+        if (/[a-z]/.test(password)) size += 26;
+        if (/[A-Z]/.test(password)) size += 26;
+        if (/[0-9]/.test(password)) size += 10;
+        if (/[^a-zA-Z0-9]/.test(password)) size += 32;
+        return size || 1;
+    }
+    
+    detectPatterns(password) {
+        const patterns = [];
+        
+        // Séquences
+        if (/(012|123|234|345|456|567|678|789|890)/.test(password)) {
+            patterns.push('sequential_numbers');
+        }
+        
+        // Répétitions
+        if (/(.)\1{2,}/.test(password)) {
+            patterns.push('repeated_characters');
+        }
+        
+        // Clavier
+        const keyboard = ['qwerty', 'asdfgh', 'zxcvbn'];
+        for (const pattern of keyboard) {
+            if (password.toLowerCase().includes(pattern)) {
+                patterns.push('keyboard_pattern');
+                break;
+            }
+        }
+        
+        return patterns;
+    }
+    
+    analyzeCharacterTypes(password) {
+        return {
+            lowercase: /[a-z]/.test(password),
+            uppercase: /[A-Z]/.test(password),
+            digits: /[0-9]/.test(password),
+            special: /[^a-zA-Z0-9]/.test(password)
+        };
+    }
+    
+    calculateStrength(entropy) {
+        if (entropy < 28) return 'Très faible';
+        if (entropy < 36) return 'Faible';
+        if (entropy < 60) return 'Moyen';
+        if (entropy < 128) return 'Fort';
+        return 'Très fort';
+    }
+}
+```
+
+## Entropie des phrases de passe
+
+Les phrases de passe (passphrases) peuvent avoir une entropie élevée même avec des mots simples.
+
+### Calcul pour phrases de passe
+
+```javascript
+function calculatePassphraseEntropy(words, wordListSize = 7776) {
+    // Diceware utilise une liste de 7776 mots
+    return words.length * Math.log2(wordListSize);
+}
+
+// Exemple
+const passphrase = "correct horse battery staple";
+const words = passphrase.split(' ');
+const entropy = calculatePassphraseEntropy(words);
+console.log(entropy); // ~52 bits (4 mots × 12.9 bits)
+```
+
+### Avantages
+
+- Entropie élevée avec des mots simples
+- Facile à retenir
+- Résistant aux attaques par dictionnaire (si mots aléatoires)
+
+## Recommandations
+
+### Entropie minimale
+
+- **Mots de passe** : Minimum 60 bits d'entropie
+- **Clés cryptographiques** : Minimum 128 bits d'entropie
+- **Tokens de session** : Minimum 128 bits d'entropie
+- **Nonces** : Minimum 96 bits d'entropie
+
+### Bonnes pratiques
+
+- Utiliser des générateurs cryptographiquement sécurisés
+- Éviter les patterns prévisibles
+- Utiliser des phrases de passe longues (5+ mots)
+- Vérifier l'entropie avant d'accepter un mot de passe
+- Utiliser des outils d'analyse (zxcvbn)
+- Éduquer les utilisateurs sur l'entropie
+
+## Conclusion
+
+L'analyse d'entropie permet d'évaluer objectivement la force d'un mot de passe et d'identifier les faiblesses. Comprendre la différence entre entropie théorique et entropie effective, ainsi que l'impact des patterns et des attaques par dictionnaire, est essentiel pour créer des politiques de mots de passe robustes.
+
+## Références techniques
+
+- [Shannon, C. E. (1948). A Mathematical Theory of Communication](https://ieeexplore.ieee.org/document/6773024)
+- [NIST SP 800-63B - Digital Identity Guidelines](https://pages.nist.gov/800-63-3/)
+- [zxcvbn - Password Strength Estimation](https://github.com/dropbox/zxcvbn)
+- [Diceware Passphrase](https://theworld.com/~reinhold/diceware.html)

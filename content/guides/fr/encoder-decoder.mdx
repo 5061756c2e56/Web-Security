@@ -1,0 +1,429 @@
+---
+title: "Encodage et décodage - Guide complet de sécurité"
+category: "best-practices"
+description: "Guide expert sur l'encodage : Base64, Base64URL, Hex, URL encoding, ASCII, UTF-8, sécurité, vulnérabilités d'injection, bonnes pratiques et cas d'usage."
+coverImage: "/guides/encoder.jpg"
+date: "2024-03-06"
+difficulty: "intermédiaire"
+readingTime: "35 min"
+prerequisites: ["Bases de l'informatique", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Encodage et décodage - Guide complet de sécurité
+
+L'encodage est le processus de conversion de données d'un format à un autre pour faciliter la transmission ou le stockage. Contrairement au chiffrement, l'encodage n'est pas sécurisé et peut être facilement inversé. Comprendre les différents types d'encodage et leurs vulnérabilités est essentiel pour la sécurité.
+
+## Introduction
+
+**Encodage vs Chiffrement :**
+
+- **Encodage** : Conversion de format, réversible sans clé secrète
+- **Chiffrement** : Transformation sécurisée, nécessite une clé pour déchiffrer
+
+**⚠️ Important :** L'encodage n'est PAS une méthode de sécurité. C'est une simple conversion de format.
+
+## Base64
+
+### Principe
+
+Encodage binaire en texte utilisant 64 caractères :
+- A-Z (26 caractères)
+- a-z (26 caractères)
+- 0-9 (10 caractères)
+- + et / (2 caractères)
+- = (padding)
+
+Chaque groupe de 3 bytes est encodé en 4 caractères Base64.
+
+### Algorithme
+
+```
+1. Prendre 3 bytes (24 bits)
+2. Diviser en 4 groupes de 6 bits
+3. Convertir chaque groupe en caractère Base64
+4. Ajouter padding si nécessaire
+```
+
+### Exemple
+
+```javascript
+const crypto = require('crypto');
+
+// Texte original
+const text = "Hello";
+
+// Encodage
+const encoded = Buffer.from(text).toString('base64');
+console.log(encoded); // "SGVsbG8="
+
+// Décodage
+const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+console.log(decoded); // "Hello"
+```
+
+### Utilisation
+
+- Encodage de données binaires dans JSON/XML
+- Transfert de fichiers via email (MIME)
+- Stockage de données dans les URLs (avec précaution)
+- Tokens et identifiants
+
+### Taille
+
+Base64 augmente la taille des données d'environ 33% (4 caractères pour 3 bytes).
+
+## Base64URL
+
+Variante de Base64 optimisée pour les URLs.
+
+### Différences avec Base64
+
+- Remplace `+` par `-`
+- Remplace `/` par `_`
+- Supprime le padding `=` (optionnel)
+
+### Utilisation
+
+```javascript
+function base64UrlEncode(str) {
+    return Buffer.from(str)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+}
+
+function base64UrlDecode(str) {
+    str = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) {
+        str += '=';
+    }
+    return Buffer.from(str, 'base64').toString('utf8');
+}
+```
+
+### Cas d'usage
+
+- JWT (JSON Web Tokens)
+- Tokens d'URL
+- Identifiants dans les URLs
+
+## Hexadécimal (Hex)
+
+Représentation des données binaires en base 16.
+
+### Format
+
+Chaque byte est représenté par 2 caractères hex (0-9, A-F).
+
+### Exemple
+
+```javascript
+const data = Buffer.from("Hello");
+
+// Encodage
+const hex = data.toString('hex');
+console.log(hex); // "48656c6c6f"
+
+// Décodage
+const decoded = Buffer.from(hex, 'hex').toString('utf8');
+console.log(decoded); // "Hello"
+```
+
+### Utilisation
+
+- Affichage de hash cryptographiques
+- Représentation de clés et IV
+- Debug et analyse de données binaires
+- Couleurs CSS (#RRGGBB)
+
+### Taille
+
+Hex double la taille des données (2 caractères pour 1 byte).
+
+## URL Encoding (Percent Encoding)
+
+Encodage des caractères spéciaux dans les URLs.
+
+### Format
+
+Utilise le format `%XX` où XX est le code hexadécimal du caractère.
+
+### Caractères encodés
+
+```javascript
+const encodeURIComponent = require('querystring').escape;
+
+// Espace
+encodeURIComponent(' '); // "%20"
+
+// &
+encodeURIComponent('&'); // "%26"
+
+// =
+encodeURIComponent('='); // "%3D"
+
+// <
+encodeURIComponent('<'); // "%3C"
+```
+
+### Caractères réservés
+
+Les caractères suivants doivent être encodés dans les URLs :
+- `!` `*` `'` `(` `)` `;` `:` `@` `&` `=` `+` `$` `,` `/` `?` `%` `#` `[` `]`
+
+### Utilisation
+
+```javascript
+// Encodage
+const url = "https://example.com/search?q=hello world";
+const encoded = encodeURIComponent("hello world");
+// "https://example.com/search?q=hello%20world"
+
+// Décodage
+const decoded = decodeURIComponent("hello%20world");
+// "hello world"
+```
+
+## ASCII
+
+American Standard Code for Information Interchange.
+
+### Caractéristiques
+
+- 7 bits (128 caractères)
+- Caractères de contrôle (0-31)
+- Caractères imprimables (32-126)
+- Caractère DEL (127)
+
+### Limitations
+
+- Ne supporte que les caractères anglais de base
+- Pas d'accents, pas de caractères spéciaux internationaux
+
+## UTF-8
+
+Encodage Unicode le plus utilisé.
+
+### Caractéristiques
+
+- Compatible avec ASCII
+- Supporte tous les caractères Unicode
+- Variable length (1-4 bytes par caractère)
+
+### Exemple
+
+```javascript
+const text = "Hello 世界";
+
+// Encodage UTF-8
+const utf8 = Buffer.from(text, 'utf8');
+console.log(utf8); // <Buffer 48 65 6c 6c 6f 20 e4 b8 96 e7 95 8c>
+
+// Décodage
+const decoded = utf8.toString('utf8');
+console.log(decoded); // "Hello 世界"
+```
+
+## Vulnérabilités
+
+### Injection via encodage
+
+Les attaquants peuvent utiliser l'encodage pour contourner les filtres de sécurité.
+
+#### Exemple XSS
+
+```javascript
+// Filtre vulnérable
+function sanitize(input) {
+    return input.replace(/<script>/gi, '');
+}
+
+// Attaque avec encodage
+const attack = "%3Cscript%3Ealert('XSS')%3C/script%3E";
+const decoded = decodeURIComponent(attack);
+// <script>alert('XSS')</script>
+```
+
+#### Protection
+
+```javascript
+function sanitize(input) {
+    // Décoder d'abord
+    let decoded = input;
+    try {
+        decoded = decodeURIComponent(input);
+    } catch (e) {}
+    
+    // Puis sanitizer
+    return decoded.replace(/<script[^>]*>.*?<\/script>/gi, '');
+}
+```
+
+### Double encodage
+
+Certains systèmes décodent plusieurs fois, permettant le double encodage.
+
+#### Exemple
+
+```javascript
+// Encodage simple
+const single = encodeURIComponent("<script>");
+// "%3Cscript%3E"
+
+// Double encodage
+const double = encodeURIComponent("%3Cscript%3E");
+// "%253Cscript%253E"
+
+// Si le système décode deux fois
+const decoded = decodeURIComponent(decodeURIComponent(double));
+// <script>
+```
+
+#### Protection
+
+```javascript
+function decodeOnce(input) {
+    let decoded = input;
+    let previous = '';
+    
+    while (decoded !== previous) {
+        previous = decoded;
+        try {
+            decoded = decodeURIComponent(decoded);
+        } catch (e) {
+            break;
+        }
+    }
+    
+    return decoded;
+}
+```
+
+### Confusion encodage/chiffrement
+
+Ne jamais utiliser l'encodage comme méthode de sécurité.
+
+```javascript
+// ❌ Vulnérable : Base64 n'est pas du chiffrement
+function "encrypt"(data) {
+    return Buffer.from(data).toString('base64');
+}
+
+// ✅ Correct : Utiliser un vrai chiffrement
+const crypto = require('crypto');
+function encrypt(data, key) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([
+        cipher.update(data, 'utf8'),
+        cipher.final()
+    ]);
+    return {
+        iv: iv.toString('hex'),
+        data: encrypted.toString('hex')
+    };
+}
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Ne jamais utiliser l'encodage comme sécurité
+- [ ] Valider et nettoyer toutes les entrées décodées
+- [ ] Utiliser le bon type d'encodage selon le contexte
+- [ ] Être conscient des risques d'injection
+- [ ] Décoder une seule fois
+- [ ] Valider le format après décodage
+- [ ] Utiliser des bibliothèques réputées
+- [ ] Tester les cas limites
+- [ ] Documenter les choix d'encodage
+- [ ] Former l'équipe sur les différences encodage/chiffrement
+
+### Choix d'encodage
+
+| Contexte | Encodage recommandé |
+|----------|---------------------|
+| Données binaires dans JSON | Base64 |
+| Tokens dans URLs | Base64URL |
+| Hash cryptographiques | Hex |
+| Paramètres d'URL | URL Encoding |
+| Texte international | UTF-8 |
+| Identifiants courts | Hex ou Base64URL |
+
+## Implémentation complète
+
+```javascript
+class EncodingService {
+    static base64Encode(data) {
+        return Buffer.from(data).toString('base64');
+    }
+    
+    static base64Decode(encoded) {
+        return Buffer.from(encoded, 'base64').toString('utf8');
+    }
+    
+    static base64UrlEncode(data) {
+        return Buffer.from(data)
+            .toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+    }
+    
+    static base64UrlDecode(encoded) {
+        let str = encoded.replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) {
+            str += '=';
+        }
+        return Buffer.from(str, 'base64').toString('utf8');
+    }
+    
+    static hexEncode(data) {
+        return Buffer.from(data).toString('hex');
+    }
+    
+    static hexDecode(encoded) {
+        return Buffer.from(encoded, 'hex').toString('utf8');
+    }
+    
+    static urlEncode(data) {
+        return encodeURIComponent(data);
+    }
+    
+    static urlDecode(encoded) {
+        return decodeURIComponent(encoded);
+    }
+    
+    static safeDecode(input, maxDepth = 1) {
+        let decoded = input;
+        let depth = 0;
+        let previous = '';
+        
+        while (decoded !== previous && depth < maxDepth) {
+            previous = decoded;
+            try {
+                decoded = decodeURIComponent(decoded);
+                depth++;
+            } catch (e) {
+                break;
+            }
+        }
+        
+        return decoded;
+    }
+}
+```
+
+## Conclusion
+
+L'encodage est un outil utile pour la transmission de données, mais ne doit jamais être confondu avec le chiffrement. Comprendre les différents types d'encodage, leurs vulnérabilités et leurs cas d'usage appropriés est essentiel pour la sécurité et le développement d'applications robustes.
+
+## Références techniques
+
+- [RFC 4648 - The Base16, Base32, and Base64 Data Encodings](https://tools.ietf.org/html/rfc4648)
+- [RFC 3986 - URI Generic Syntax](https://tools.ietf.org/html/rfc3986)
+- [MDN - encodeURIComponent](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent)
+- [Unicode Standard](https://www.unicode.org/standard/standard.html)

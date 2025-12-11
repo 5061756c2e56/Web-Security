@@ -1,0 +1,414 @@
+---
+title: "QR Codes et sécurité - Guide complet"
+category: "best-practices"
+description: "Guide expert sur les QR codes : formats, sécurité, risques (QR code malveillants, phishing), techniques d'attaque, protection, bonnes pratiques et outils de vérification."
+coverImage: "/guides/qrcode.jpg"
+date: "2024-03-07"
+difficulty: "intermédiaire"
+readingTime: "35 min"
+prerequisites: ["Concepts de sécurité", "Phishing"]
+lastUpdated: "2024-12-19"
+---
+
+# QR Codes et sécurité - Guide complet
+
+Les QR codes (Quick Response codes) sont des codes-barres bidimensionnels largement utilisés pour stocker et transmettre des informations. Bien que pratiques, ils présentent des risques de sécurité importants car leur contenu n'est pas visible avant le scan.
+
+## Introduction
+
+Un QR code peut stocker jusqu'à 4,296 caractères alphanumériques ou 2,953 bytes de données binaires. Le contenu n'est pas visible à l'œil nu, ce qui en fait un vecteur d'attaque idéal.
+
+**Utilisations courantes :**
+- URLs de sites web
+- Informations de contact (vCard)
+- Identifiants Wi-Fi
+- Cryptomonnaies (adresses de wallet)
+- Authentification à deux facteurs
+- Paiements mobiles
+
+**Risques :**
+- Contenu malveillant invisible
+- Pas de vérification avant exécution
+- Confiance aveugle des utilisateurs
+
+## Formats et types de données
+
+### Types de données supportés
+
+#### URL
+
+```javascript
+// QR code contenant une URL
+const qrData = "https://example.com/page";
+```
+
+#### Texte
+
+```javascript
+const qrData = "Hello, World!";
+```
+
+#### vCard (Contact)
+
+```javascript
+const qrData = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+ORG:Example Inc
+TEL:+1234567890
+EMAIL:john@example.com
+END:VCARD`;
+```
+
+#### Wi-Fi
+
+```javascript
+const qrData = `WIFI:T:WPA;S:MyNetwork;P:MyPassword;;`;
+```
+
+#### Cryptomonnaie
+
+```javascript
+const qrData = "bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?amount=0.1";
+```
+
+#### SMS
+
+```javascript
+const qrData = "SMSTO:+1234567890:Hello";
+```
+
+## Risques de sécurité
+
+### QR Codes malveillants
+
+Les attaquants peuvent créer des QR codes pointant vers :
+
+#### Sites de phishing
+
+```javascript
+// QR code malveillant
+const maliciousQR = "https://examp1e.com/login"; // 'l' remplacé par '1'
+
+// L'utilisateur scanne et entre ses identifiants sur un site frauduleux
+```
+
+#### Applications malveillantes
+
+```javascript
+// QR code pointant vers une application malveillante
+const maliciousQR = "https://attacker.com/app.apk";
+```
+
+#### Réseaux Wi-Fi compromis
+
+```javascript
+// QR code configurant un réseau Wi-Fi malveillant
+const maliciousQR = "WIFI:T:WPA;S:FreeWiFi;P:password123;;";
+
+// L'utilisateur se connecte à un réseau contrôlé par l'attaquant
+```
+
+#### Actions non autorisées
+
+```javascript
+// QR code déclenchant une action (ex: paiement)
+const maliciousQR = "https://payment.com/transfer?to=attacker&amount=1000";
+```
+
+### Attaques courantes
+
+#### Phishing
+
+**Scénario :**
+1. Attaquant place un QR code malveillant dans un lieu public
+2. Victime scanne le QR code
+3. Redirection vers un site de phishing
+4. Victime entre ses identifiants
+
+**Protection :**
+- Vérifier l'URL avant de l'ouvrir
+- Utiliser des scanners QR sécurisés
+- Ne pas scanner de QR codes suspects
+
+#### Malware
+
+**Scénario :**
+1. QR code pointant vers un fichier malveillant
+2. Téléchargement automatique
+3. Installation du malware
+
+**Protection :**
+- Désactiver le téléchargement automatique
+- Scanner les fichiers téléchargés
+- Utiliser des applications antivirus
+
+#### Social Engineering
+
+**Scénario :**
+1. QR codes dans des lieux publics (affiches, flyers)
+2. Apparence légitime
+3. Victimes confiantes
+
+**Protection :**
+- Vérifier la source du QR code
+- Ne pas scanner de QR codes non vérifiés
+- Utiliser des QR codes signés pour les applications critiques
+
+## Techniques d'attaque
+
+### URL Obfuscation
+
+```javascript
+// Techniques pour masquer des URLs malveillantes
+
+// Caractères similaires
+const url1 = "https://examp1e.com"; // 'l' → '1'
+const url2 = "https://exampIe.com"; // 'l' → 'I'
+
+// Domaine similaire
+const url3 = "https://example.co"; // .com → .co
+const url4 = "https://example-com.com"; // Domaine différent
+
+// Encodage
+const url5 = "https://example.com%2Fevil"; // Encodage URL
+```
+
+### QR Code Overlay
+
+Superposition d'un QR code malveillant sur un QR code légitime.
+
+### QR Code dans QR Code
+
+QR code contenant un autre QR code malveillant.
+
+## Protection et bonnes pratiques
+
+### Pour les utilisateurs
+
+#### Vérification avant ouverture
+
+```javascript
+// Scanner QR sécurisé
+class SecureQRScanner {
+    scan(qrCode) {
+        const data = this.decodeQR(qrCode);
+        
+        // Vérifier le type
+        if (this.isURL(data)) {
+            return this.verifyURL(data);
+        }
+        
+        if (this.isWiFi(data)) {
+            return this.verifyWiFi(data);
+        }
+        
+        return { safe: false, reason: 'Unknown type' };
+    }
+    
+    verifyURL(url) {
+        // Vérifier le domaine
+        const domain = new URL(url).hostname;
+        const suspiciousPatterns = [
+            /[0-9]/g, // Chiffres dans le domaine
+            /[il1Lo0O]/g, // Caractères similaires
+            /^[^.]+\.[^.]{1,3}$/ // Domaines courts suspects
+        ];
+        
+        for (const pattern of suspiciousPatterns) {
+            if (pattern.test(domain)) {
+                return { safe: false, reason: 'Suspicious domain' };
+            }
+        }
+        
+        // Vérifier contre une whitelist
+        const allowedDomains = ['example.com', 'trusted.com'];
+        if (!allowedDomains.includes(domain)) {
+            return { safe: false, reason: 'Domain not in whitelist' };
+        }
+        
+        return { safe: true };
+    }
+}
+```
+
+#### Utilisation de scanners sécurisés
+
+- Vérifier l'URL avant ouverture
+- Afficher le contenu avant exécution
+- Bloquer les actions automatiques
+- Scanner avec antivirus
+
+### Pour les développeurs
+
+#### QR Codes signés
+
+```javascript
+const crypto = require('crypto');
+
+class SignedQRCode {
+    generate(data, privateKey) {
+        const signature = crypto.sign('sha256', Buffer.from(data), privateKey);
+        const signedData = {
+            data: data,
+            signature: signature.toString('base64'),
+            timestamp: Date.now()
+        };
+        
+        return JSON.stringify(signedData);
+    }
+    
+    verify(signedQR, publicKey) {
+        const signedData = JSON.parse(signedQR);
+        const isValid = crypto.verify(
+            'sha256',
+            Buffer.from(signedData.data),
+            publicKey,
+            Buffer.from(signedData.signature, 'base64')
+        );
+        
+        if (!isValid) {
+            throw new Error('Invalid signature');
+        }
+        
+        // Vérifier l'expiration
+        const age = Date.now() - signedData.timestamp;
+        if (age > 24 * 60 * 60 * 1000) { // 24 heures
+            throw new Error('QR code expired');
+        }
+        
+        return signedData.data;
+    }
+}
+```
+
+#### Validation stricte
+
+```javascript
+class QRCodeValidator {
+    validate(data) {
+        const type = this.detectType(data);
+        
+        switch (type) {
+            case 'URL':
+                return this.validateURL(data);
+            case 'WiFi':
+                return this.validateWiFi(data);
+            case 'vCard':
+                return this.validateVCard(data);
+            default:
+                return { valid: false, reason: 'Unknown type' };
+        }
+    }
+    
+    validateURL(url) {
+        try {
+            const parsed = new URL(url);
+            
+            // Vérifier le protocole
+            if (!['http:', 'https:'].includes(parsed.protocol)) {
+                return { valid: false, reason: 'Invalid protocol' };
+            }
+            
+            // Vérifier le domaine
+            const domain = parsed.hostname;
+            if (this.isSuspiciousDomain(domain)) {
+                return { valid: false, reason: 'Suspicious domain' };
+            }
+            
+            return { valid: true };
+        } catch (error) {
+            return { valid: false, reason: 'Invalid URL' };
+        }
+    }
+    
+    isSuspiciousDomain(domain) {
+        const suspicious = [
+            /[0-9]/g,
+            /[il1Lo0O]/g,
+            /^[^.]+\.[^.]{1,3}$/
+        ];
+        
+        return suspicious.some(pattern => pattern.test(domain));
+    }
+}
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Vérifier l'URL avant de l'ouvrir
+- [ ] Utiliser des scanners QR sécurisés
+- [ ] Ne pas scanner de QR codes suspects
+- [ ] Vérifier la source du QR code
+- [ ] Utiliser des QR codes signés pour les applications critiques
+- [ ] Désactiver les actions automatiques
+- [ ] Scanner les fichiers téléchargés
+- [ ] Éduquer les utilisateurs sur les risques
+- [ ] Implémenter la validation côté serveur
+- [ ] Logger les scans de QR codes
+- [ ] Monitorer les activités suspectes
+- [ ] Utiliser des whitelists de domaines
+- [ ] Implémenter la vérification de signature
+- [ ] Tester régulièrement les scanners
+
+### Pour les organisations
+
+- Former le personnel sur les risques QR
+- Utiliser des QR codes signés pour les applications internes
+- Valider tous les QR codes avant publication
+- Monitorer l'utilisation des QR codes
+- Implémenter des politiques de sécurité
+
+## Outils de vérification
+
+### Analyse de QR codes
+
+```javascript
+class QRCodeAnalyzer {
+    analyze(qrData) {
+        const analysis = {
+            type: this.detectType(qrData),
+            content: qrData,
+            risks: [],
+            recommendations: []
+        };
+        
+        if (this.isURL(qrData)) {
+            analysis.risks.push(...this.analyzeURL(qrData));
+        }
+        
+        if (this.isWiFi(qrData)) {
+            analysis.risks.push('WiFi configuration');
+        }
+        
+        return analysis;
+    }
+    
+    analyzeURL(url) {
+        const risks = [];
+        const domain = new URL(url).hostname;
+        
+        if (this.isSuspiciousDomain(domain)) {
+            risks.push('Suspicious domain');
+        }
+        
+        if (!url.startsWith('https://')) {
+            risks.push('Unencrypted connection');
+        }
+        
+        return risks;
+    }
+}
+```
+
+## Conclusion
+
+Les QR codes sont pratiques mais nécessitent une utilisation prudente. Toujours vérifier la destination avant d'interagir avec un QR code, utiliser des scanners sécurisés, et implémenter des mesures de protection pour les applications critiques. La sensibilisation et la formation sont essentielles pour réduire les risques.
+
+## Références techniques
+
+- [ISO/IEC 18004 - QR Code Standard](https://www.iso.org/standard/62021.html)
+- [OWASP Mobile Security](https://owasp.org/www-project-mobile-security/)
+- [NIST Guidelines for QR Code Security](https://www.nist.gov/)

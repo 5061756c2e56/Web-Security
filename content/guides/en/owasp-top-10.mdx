@@ -1,0 +1,1724 @@
+---
+title: "OWASP Top 10 - The 10 Most Critical Web Application Security Risks"
+category: "web-security"
+description: "Expert guide on OWASP Top 10 2021: detailed analysis of each vulnerability, exploitation mechanisms, advanced protection techniques, code examples, testing tools, and real-world use cases. Essential reference for developers and cybersecurity professionals."
+coverImage: "/guides/owasp.jpg"
+date: "2024-03-15"
+difficulty: "intermediate"
+readingTime: "45 min"
+prerequisites: ["Web development basics", "Web security concepts"]
+lastUpdated: "2024-12-19"
+---
+
+# OWASP Top 10 - The 10 Most Critical Web Application Security Risks
+
+The OWASP Top 10 is a reference publication by the Open Web Application Security Project (OWASP) that identifies and documents the 10 most critical security risks for web applications. This list, regularly updated (latest version: 2021), serves as an essential guide for developers, security auditors, and organizations seeking to secure their applications.
+
+## Introduction
+
+The OWASP Top 10 2021 represents a significant evolution from previous versions. It incorporates data from over 500,000 applications and reflects current threats in the cybersecurity landscape. Each vulnerability is ranked according to its frequency of occurrence, detectability, and potential impact.
+
+**Objectives of this guide:**
+- Understand in depth each vulnerability in the Top 10
+- Master exploitation mechanisms and attack vectors
+- Implement robust, multi-layered protections
+- Use appropriate tools for detection and testing
+
+## A01:2021 - Broken Access Control
+
+### Overview
+
+Broken access controls represent the most frequent vulnerability in the OWASP Top 10 2021. They allow unauthorized users to access resources, features, or data that should be restricted.
+
+### Exploitation Mechanisms
+
+#### IDOR (Insecure Direct Object Reference)
+
+Direct access to objects via predictable or manipulable identifiers:
+
+```javascript
+// Vulnerable
+app.get('/api/users/:id', (req, res) => {
+    const user = db.getUser(req.params.id);
+    return res.json(user);
+});
+
+// Attack: GET /api/users/123 (access to another user)
+```
+
+#### Authorization Bypass
+
+Bypassing authorization checks:
+
+```javascript
+// Vulnerable
+app.delete('/api/admin/users/:id', (req, res) => {
+    if (req.user.role === 'admin') {
+        db.deleteUser(req.params.id);
+    }
+});
+
+// Attack: Modify role in JWT token
+```
+
+#### Path Traversal
+
+Access to files outside the authorized directory:
+
+```javascript
+// Vulnerable
+app.get('/api/files/:filename', (req, res) => {
+    const file = fs.readFileSync(`./uploads/${req.params.filename}`);
+    return res.send(file);
+});
+
+// Attack: GET /api/files/../../../etc/passwd
+```
+
+#### Mass Assignment
+
+Modifying unauthorized properties via objects:
+
+```javascript
+// Vulnerable
+app.post('/api/users', (req, res) => {
+    const user = db.createUser(req.body);
+    return res.json(user);
+});
+
+// Attack: POST with { "role": "admin", "isActive": true }
+```
+
+### Protection Techniques
+
+#### Systematic Authorization Checks
+
+```javascript
+async function checkPermission(userId, resourceId, action) {
+    const user = await db.getUser(userId);
+    const resource = await db.getResource(resourceId);
+    
+    if (!resource) {
+        throw new Error('Resource not found');
+    }
+    
+    if (resource.ownerId !== userId && !user.isAdmin) {
+        throw new Error('Unauthorized');
+    }
+    
+    const permissions = await getPermissions(user.role, resource.type);
+    if (!permissions.includes(action)) {
+        throw new Error('Insufficient permissions');
+    }
+    
+    return true;
+}
+
+app.get('/api/users/:id', async (req, res) => {
+    await checkPermission(req.user.id, req.params.id, 'read');
+    const user = await db.getUser(req.params.id);
+    return res.json(user);
+});
+```
+
+#### Attribute-Based Access Control (ABAC)
+
+```javascript
+class AccessControl {
+    async canAccess(user, resource, action) {
+        const policies = await this.getPolicies(resource.type);
+        
+        for (const policy of policies) {
+            if (this.evaluatePolicy(policy, user, resource, action)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    evaluatePolicy(policy, user, resource, action) {
+        if (policy.action !== action) return false;
+        
+        if (policy.condition === 'owner') {
+            return resource.ownerId === user.id;
+        }
+        
+        if (policy.condition === 'role') {
+            return user.roles.includes(policy.role);
+        }
+        
+        if (policy.condition === 'attribute') {
+            return this.checkAttribute(user, resource, policy.attribute);
+        }
+        
+        return false;
+    }
+}
+```
+
+#### Strict Parameter Validation
+
+```javascript
+import { z } from 'zod';
+
+const userIdSchema = z.string().uuid();
+const resourceIdSchema = z.string().regex(/^[a-f0-9]{24}$/);
+
+app.get('/api/users/:id', async (req, res) => {
+    const userId = userIdSchema.parse(req.params.id);
+    
+    if (userId !== req.user.id && !req.user.isAdmin) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const user = await db.getUser(userId);
+    return res.json(user);
+});
+```
+
+### Testing Tools
+
+- **Burp Suite**: Automatic scanner and manual testing
+- **OWASP ZAP**: Automatic detection of access flaws
+- **Postman/Insomnia**: Manual endpoint testing
+- **Autorize** (Burp extension): Automatic access control testing
+
+### Real-World Cases
+
+In 2021, an access flaw in a health platform allowed users to view other patients' medical records by simply modifying the ID in the URL. Over 3 million records were exposed.
+
+## A02:2021 - Cryptographic Failures
+
+### Overview
+
+Formerly "Sensitive Data Exposure", this category covers failures in protecting sensitive data, mainly due to insufficient or absent encryption.
+
+### Types of Sensitive Data
+
+- Credentials (passwords, tokens)
+- Personal data (PII: names, addresses, social security numbers)
+- Financial data (card numbers, bank accounts)
+- Medical information (health records)
+- Application secrets (API keys, secrets)
+
+### Common Vulnerabilities
+
+#### Weak or Obsolete Encryption
+
+```javascript
+// Vulnerable: DES (obsolete since 2005)
+const crypto = require('crypto');
+const cipher = crypto.createCipher('des', key);
+
+// Vulnerable: RC4 (deprecated)
+const cipher = crypto.createCipher('rc4', key);
+
+// Correct: AES-256-GCM
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+```
+
+#### Plaintext Transmission
+
+```javascript
+// Vulnerable: HTTP instead of HTTPS
+app.use((req, res, next) => {
+    if (req.protocol !== 'https' && process.env.NODE_ENV === 'production') {
+        return res.redirect(`https://${req.hostname}${req.url}`);
+    }
+    next();
+});
+```
+
+#### Unencrypted Storage
+
+```javascript
+// Vulnerable
+const user = {
+    email: 'user@example.com',
+    creditCard: '4532-1234-5678-9010',
+    ssn: '123-45-6789'
+};
+db.save(user);
+
+// Correct
+const crypto = require('crypto');
+
+function encryptField(value, key) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    
+    const encrypted = Buffer.concat([
+        cipher.update(value, 'utf8'),
+        cipher.final()
+    ]);
+    
+    const authTag = cipher.getAuthTag();
+    
+    return {
+        iv: iv.toString('hex'),
+        data: encrypted.toString('hex'),
+        tag: authTag.toString('hex')
+    };
+}
+
+const user = {
+    email: 'user@example.com',
+    creditCard: encryptField('4532-1234-5678-9010', encryptionKey),
+    ssn: encryptField('123-45-6789', encryptionKey)
+};
+```
+
+#### Incorrect Key Management
+
+```javascript
+// Vulnerable: Hardcoded key
+const ENCRYPTION_KEY = 'my-secret-key-12345';
+
+// Vulnerable: Key in unsecured environment variables
+const key = process.env.ENCRYPTION_KEY;
+
+// Correct: Use HSM or Key Vault
+import { KeyVaultClient } from '@azure/keyvault-secrets';
+
+const client = new KeyVaultClient(vaultUrl);
+const key = await client.getSecret('encryption-key');
+```
+
+### Protection Techniques
+
+#### Encryption in Transit (TLS)
+
+```javascript
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+    key: fs.readFileSync('private-key.pem'),
+    cert: fs.readFileSync('certificate.pem'),
+    minVersion: 'TLSv1.2',
+    ciphers: [
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'ECDHE-RSA-AES256-GCM-SHA384',
+        '!aNULL',
+        '!eNULL',
+        '!EXPORT',
+        '!DES',
+        '!RC4',
+        '!MD5',
+        '!PSK',
+        '!SRP',
+        '!CAMELLIA'
+    ].join(':')
+};
+
+const server = https.createServer(options, app);
+```
+
+#### Encryption at Rest
+
+```javascript
+const crypto = require('crypto');
+
+class DataEncryption {
+    constructor(keyVault) {
+        this.keyVault = keyVault;
+    }
+    
+    async encrypt(data, keyId) {
+        const key = await this.keyVault.getKey(keyId);
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(JSON.stringify(data), 'utf8'),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            iv: iv.toString('base64'),
+            data: encrypted.toString('base64'),
+            tag: authTag.toString('base64'),
+            keyId: keyId
+        };
+    }
+    
+    async decrypt(encryptedData) {
+        const key = await this.keyVault.getKey(encryptedData.keyId);
+        const iv = Buffer.from(encryptedData.iv, 'base64');
+        const authTag = Buffer.from(encryptedData.tag, 'base64');
+        
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        
+        const decrypted = Buffer.concat([
+            decipher.update(encryptedData.data, 'base64'),
+            decipher.final()
+        ]);
+        
+        return JSON.parse(decrypted.toString('utf8'));
+    }
+}
+```
+
+#### Secure Password Hashing
+
+```javascript
+const bcrypt = require('bcrypt');
+
+async function hashPassword(password) {
+    const saltRounds = 12;
+    const hash = await bcrypt.hash(password, saltRounds);
+    return hash;
+}
+
+async function verifyPassword(password, hash) {
+    return await bcrypt.compare(password, hash);
+}
+
+// Alternative: Argon2 (more resistant to GPU/ASIC attacks)
+const argon2 = require('argon2');
+
+async function hashPasswordArgon2(password) {
+    return await argon2.hash(password, {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+        parallelism: 4
+    });
+}
+```
+
+### Best Practices
+
+- Use TLS 1.2 minimum (TLS 1.3 recommended)
+- Encrypt all sensitive data at rest
+- Use modern algorithms (AES-256-GCM, ChaCha20-Poly1305)
+- Store keys in HSMs or Key Vaults
+- Implement key rotation
+- Never store secrets in source code
+- Use adaptive functions for passwords (bcrypt, Argon2)
+- Validate TLS certificates on the client side
+
+## A03:2021 - Injection
+
+### Overview
+
+Injection vulnerabilities occur when untrusted data is sent to an interpreter as part of a command or query. The attacker can then execute commands or access unauthorized data.
+
+### Injection Types
+
+#### SQL Injection
+
+```javascript
+// Vulnerable
+app.post('/api/users', (req, res) => {
+    const query = `SELECT * FROM users WHERE username = '${req.body.username}' AND password = '${req.body.password}'`;
+    db.query(query, (err, results) => {
+        res.json(results);
+    });
+});
+
+// Attack: username = "admin'--" or "admin' OR '1'='1"
+
+// Protection: Prepared Statements
+app.post('/api/users', (req, res) => {
+    const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+    db.query(query, [req.body.username, req.body.password], (err, results) => {
+        res.json(results);
+    });
+});
+
+// Protection: ORM
+const User = require('./models/User');
+app.post('/api/users', async (req, res) => {
+    const user = await User.findOne({
+        where: {
+            username: req.body.username,
+            password: req.body.password
+        }
+    });
+    res.json(user);
+});
+```
+
+#### NoSQL Injection
+
+```javascript
+// Vulnerable
+app.post('/api/login', async (req, res) => {
+    const user = await db.users.findOne({
+        username: req.body.username,
+        password: req.body.password
+    });
+    res.json(user);
+});
+
+// Attack: { "username": "admin", "password": { "$ne": null } }
+
+// Protection: Validation and sanitization
+const { z } = require('zod');
+
+const loginSchema = z.object({
+    username: z.string().min(3).max(50),
+    password: z.string().min(8)
+});
+
+app.post('/api/login', async (req, res) => {
+    const validated = loginSchema.parse(req.body);
+    const user = await db.users.findOne({
+        username: validated.username,
+        password: validated.password
+    });
+    res.json(user);
+});
+```
+
+#### Command Injection
+
+```javascript
+// Vulnerable
+const { exec } = require('child_process');
+
+app.get('/api/ping', (req, res) => {
+    exec(`ping -c 4 ${req.query.host}`, (error, stdout) => {
+        res.send(stdout);
+    });
+});
+
+// Attack: ?host=8.8.8.8; rm -rf /
+
+// Protection: Strict validation and secure APIs
+const { z } = require('zod');
+const dns = require('dns').promises;
+
+const hostSchema = z.string().regex(/^[a-zA-Z0-9.-]+$/);
+
+app.get('/api/ping', async (req, res) => {
+    const host = hostSchema.parse(req.query.host);
+    
+    try {
+        await dns.lookup(host);
+        const { execFile } = require('child_process');
+        
+        execFile('ping', ['-c', '4', host], { timeout: 5000 }, (error, stdout) => {
+            if (error) {
+                return res.status(400).json({ error: 'Ping failed' });
+            }
+            res.send(stdout);
+        });
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid host' });
+    }
+});
+```
+
+#### LDAP Injection
+
+```javascript
+// Vulnerable
+const ldap = require('ldapjs');
+
+app.post('/api/search', (req, res) => {
+    const filter = `(&(cn=${req.body.name})(mail=${req.body.email}))`;
+    const client = ldap.createClient({ url: 'ldap://localhost' });
+    
+    client.search('dc=example,dc=com', { filter }, (err, res) => {
+        // ...
+    });
+});
+
+// Attack: name = "*)(uid=*))(|(uid=*"
+
+// Protection: LDAP escaping
+function escapeLDAP(filter) {
+    return filter
+        .replace(/\\/g, '\\5c')
+        .replace(/\*/g, '\\2a')
+        .replace(/\(/g, '\\28')
+        .replace(/\)/g, '\\29')
+        .replace(/\0/g, '\\00');
+}
+
+app.post('/api/search', (req, res) => {
+    const name = escapeLDAP(req.body.name);
+    const email = escapeLDAP(req.body.email);
+    const filter = `(&(cn=${name})(mail=${email}))`;
+    // ...
+});
+```
+
+### Advanced Protection Techniques
+
+#### Layered Validation
+
+```javascript
+class InputValidator {
+    static validateSQLInput(input) {
+        if (typeof input !== 'string') {
+            throw new Error('Input must be a string');
+        }
+        
+        const dangerous = ['--', ';', '/*', '*/', 'xp_', 'sp_', 'exec', 'union', 'select'];
+        for (const pattern of dangerous) {
+            if (input.toLowerCase().includes(pattern)) {
+                throw new Error('Potentially dangerous input detected');
+            }
+        }
+        
+        return input.trim();
+    }
+    
+    static validateNoSQLInput(input) {
+        if (typeof input === 'object' && input !== null) {
+            throw new Error('Objects not allowed in input');
+        }
+        
+        return String(input);
+    }
+    
+    static validateCommandInput(input) {
+        const allowedPattern = /^[a-zA-Z0-9.-]+$/;
+        if (!allowedPattern.test(input)) {
+            throw new Error('Invalid input format');
+        }
+        return input;
+    }
+}
+```
+
+#### WAF (Web Application Firewall)
+
+```javascript
+const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+const app = express();
+
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"]
+        }
+    }
+}));
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100
+});
+
+app.use('/api/', limiter);
+
+// SQL injection filter
+app.use((req, res, next) => {
+    const sqlPatterns = [
+        /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/i,
+        /(--|;|\/\*|\*\/|xp_|sp_)/
+    ];
+    
+    const bodyString = JSON.stringify(req.body);
+    const queryString = JSON.stringify(req.query);
+    
+    for (const pattern of sqlPatterns) {
+        if (pattern.test(bodyString) || pattern.test(queryString)) {
+            return res.status(400).json({ error: 'Invalid request' });
+        }
+    }
+    
+    next();
+});
+```
+
+### Testing Tools
+
+- **SQLMap**: Automatic detection and exploitation of SQL Injection
+- **NoSQLMap**: NoSQL injection testing
+- **Burp Suite**: Scanner and manual testing
+- **OWASP ZAP**: Automatic detection
+- **SonarQube**: Static code analysis
+
+### Real-World Cases
+
+In 2017, Equifax suffered a massive breach due to SQL injection, exposing data from 147 million people. The attack exploited a vulnerability in Apache Struts.
+
+## A04:2021 - Insecure Design
+
+### Overview
+
+This category focuses on design weaknesses rather than implementation errors. It covers risks related to insufficient security architecture from the design phase.
+
+### Common Design Problems
+
+#### Absence of Threat Modeling
+
+An application designed without threat consideration is vulnerable by nature, even with correct implementation.
+
+**Threat Modeling Process:**
+
+1. **Asset Identification**: What are the critical data and functionalities?
+2. **Actor Identification**: Who can attack the application?
+3. **Threat Identification**: What are the possible attacks?
+4. **Risk Assessment**: What is the probability and impact?
+5. **Mitigation**: How to reduce risks?
+
+#### Defective Authentication Flow
+
+```javascript
+// Vulnerable design: No attempt limit
+class AuthService {
+    async login(username, password) {
+        const user = await db.findUser(username);
+        if (user && await bcrypt.compare(password, user.password)) {
+            return this.generateToken(user);
+        }
+        throw new Error('Invalid credentials');
+    }
+}
+
+// Secure design: Rate limiting and account lockout
+class SecureAuthService {
+    constructor(rateLimiter, accountLockout) {
+        this.rateLimiter = rateLimiter;
+        this.accountLockout = accountLockout;
+    }
+    
+    async login(username, password, ipAddress) {
+        await this.rateLimiter.check(ipAddress);
+        
+        if (await this.accountLockout.isLocked(username)) {
+            throw new Error('Account locked');
+        }
+        
+        const user = await db.findUser(username);
+        if (!user) {
+            await this.accountLockout.recordFailedAttempt(username);
+            throw new Error('Invalid credentials');
+        }
+        
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) {
+            await this.accountLockout.recordFailedAttempt(username);
+            throw new Error('Invalid credentials');
+        }
+        
+        await this.accountLockout.clearFailedAttempts(username);
+        return this.generateToken(user);
+    }
+}
+```
+
+#### Absence of Defense in Depth
+
+```javascript
+// Vulnerable design: Single security layer
+class PaymentService {
+    processPayment(userId, amount, cardNumber) {
+        if (this.isAuthorized(userId)) {
+            return this.chargeCard(cardNumber, amount);
+        }
+    }
+}
+
+// Secure design: Defense in depth
+class SecurePaymentService {
+    constructor(authService, fraudDetection, auditLogger) {
+        this.authService = authService;
+        this.fraudDetection = fraudDetection;
+        this.auditLogger = auditLogger;
+    }
+    
+    async processPayment(userId, amount, cardNumber, context) {
+        // Layer 1: Authentication
+        if (!await this.authService.isAuthenticated(userId)) {
+            throw new Error('Not authenticated');
+        }
+        
+        // Layer 2: Authorization
+        if (!await this.authService.isAuthorized(userId, 'payment:process')) {
+            throw new Error('Not authorized');
+        }
+        
+        // Layer 3: Business validation
+        if (amount <= 0 || amount > 10000) {
+            throw new Error('Invalid amount');
+        }
+        
+        // Layer 4: Fraud detection
+        const fraudScore = await this.fraudDetection.analyze({
+            userId,
+            amount,
+            cardNumber,
+            ipAddress: context.ipAddress,
+            userAgent: context.userAgent,
+            timestamp: Date.now()
+        });
+        
+        if (fraudScore > 0.7) {
+            await this.auditLogger.log({
+                type: 'fraud_detected',
+                userId,
+                amount,
+                fraudScore
+            });
+            throw new Error('Fraud detected');
+        }
+        
+        // Layer 5: Audit
+        await this.auditLogger.log({
+            type: 'payment_initiated',
+            userId,
+            amount
+        });
+        
+        // Layer 6: Secure transaction
+        const result = await this.chargeCard(cardNumber, amount);
+        
+        await this.auditLogger.log({
+            type: 'payment_completed',
+            userId,
+            amount,
+            transactionId: result.id
+        });
+        
+        return result;
+    }
+}
+```
+
+### Secure Design Techniques
+
+#### Least Privilege Principle
+
+```javascript
+class RoleBasedAccess {
+    constructor() {
+        this.permissions = {
+            user: ['read:own', 'write:own'],
+            moderator: ['read:own', 'write:own', 'read:all', 'moderate'],
+            admin: ['read:all', 'write:all', 'moderate', 'admin']
+        };
+    }
+    
+    hasPermission(role, resource, action) {
+        const rolePerms = this.permissions[role] || [];
+        const required = `${action}:${resource}`;
+        return rolePerms.includes(required) || rolePerms.includes('admin');
+    }
+}
+```
+
+#### Separation of Concerns
+
+```javascript
+// Layered architecture
+class SecurityLayer {
+    async validateRequest(req) {
+        // Input validation
+    }
+}
+
+class BusinessLogicLayer {
+    async processBusinessRule(data) {
+        // Business logic
+    }
+}
+
+class DataAccessLayer {
+    async persistData(data) {
+        // Data access
+    }
+}
+
+class ApplicationService {
+    constructor(security, business, data) {
+        this.security = security;
+        this.business = business;
+        this.data = data;
+    }
+    
+    async execute(req) {
+        await this.security.validateRequest(req);
+        const result = await this.business.processBusinessRule(req.body);
+        return await this.data.persistData(result);
+    }
+}
+```
+
+### Best Design Practices
+
+- Perform threat modeling before development
+- Implement defense in depth
+- Apply the least privilege principle
+- Separate concerns (layered architecture)
+- Design for traceability (logging, audit)
+- Plan error and exception handling
+- Implement recovery mechanisms
+- Test security from design (security by design)
+
+## A05:2021 - Security Misconfiguration
+
+### Overview
+
+Security configuration errors are extremely common and can expose sensitive information or unsecured features.
+
+### Common Vulnerable Configurations
+
+#### Default Configuration
+
+```javascript
+// Vulnerable: Default Express configuration
+const express = require('express');
+const app = express();
+app.use(express.json());
+app.listen(3000);
+
+// Secure: Explicit configuration
+const express = require('express');
+const helmet = require('helmet');
+const app = express();
+
+app.use(helmet());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+app.listen(3000, '127.0.0.1', () => {
+    console.log('Server started');
+});
+```
+
+#### Revealing Error Handlers
+
+```javascript
+// Vulnerable
+app.use((err, req, res, next) => {
+    res.status(500).json({
+        error: err.message,
+        stack: err.stack,
+        sql: err.sql,
+        query: err.query
+    });
+});
+
+// Secure
+app.use((err, req, res, next) => {
+    const errorId = generateErrorId();
+    logger.error('Application error', {
+        errorId,
+        message: err.message,
+        stack: err.stack,
+        userId: req.user?.id,
+        path: req.path
+    });
+    
+    res.status(500).json({
+        error: 'An error occurred',
+        errorId: process.env.NODE_ENV === 'development' ? errorId : undefined
+    });
+});
+```
+
+#### Missing Security Headers
+
+```javascript
+const helmet = require('helmet');
+
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"]
+        }
+    },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    },
+    noSniff: true,
+    xssFilter: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+}));
+```
+
+#### Exposed Secrets
+
+```javascript
+// Vulnerable: Secrets in code
+const config = {
+    dbPassword: 'mySecretPassword123',
+    apiKey: 'sk_live_1234567890',
+    jwtSecret: 'myJWTSecret'
+};
+
+// Secure: Environment variables
+require('dotenv').config();
+
+const config = {
+    dbPassword: process.env.DB_PASSWORD,
+    apiKey: process.env.API_KEY,
+    jwtSecret: process.env.JWT_SECRET
+};
+
+// Environment variable validation
+const { z } = require('zod');
+
+const envSchema = z.object({
+    DB_PASSWORD: z.string().min(16),
+    API_KEY: z.string().min(32),
+    JWT_SECRET: z.string().min(32),
+    NODE_ENV: z.enum(['development', 'production', 'test'])
+});
+
+const env = envSchema.parse(process.env);
+```
+
+#### Debug Endpoints Enabled in Production
+
+```javascript
+// Vulnerable
+if (process.env.DEBUG === 'true') {
+    app.use('/debug', debugRouter);
+}
+
+// Secure
+if (process.env.NODE_ENV === 'development') {
+    app.use('/debug', debugRouter);
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+} else {
+    app.get('/debug', (req, res) => {
+        res.status(404).send('Not found');
+    });
+}
+```
+
+### Secure Configuration Checklist
+
+- Disable unnecessary features
+- Change all default configurations
+- Configure security headers correctly
+- Implement secure error handling
+- Never expose secrets in code
+- Use environment variables for configuration
+- Validate all configurations on startup
+- Disable debug endpoints in production
+- Configure CORS correctly
+- Implement rate limiting
+- Configure logs correctly (without sensitive data)
+- Use HTTPS only in production
+- Configure file permissions correctly
+- Regularly update dependencies
+
+## A06:2021 - Vulnerable and Outdated Components
+
+### Overview
+
+Using components with known vulnerabilities is a major problem. Attackers often exploit known CVEs in popular libraries.
+
+### Dependency Management
+
+#### Vulnerability Detection
+
+```bash
+# npm audit
+npm audit
+
+# npm audit fix
+npm audit fix
+
+# Snyk
+npx snyk test
+
+# OWASP Dependency-Check
+dependency-check --project "My Project" --scan ./package.json
+```
+
+#### Secure Updates
+
+```json
+{
+  "scripts": {
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix",
+    "check-updates": "npm-check-updates",
+    "update": "npm-check-updates -u && npm install"
+  }
+}
+```
+
+#### Version Pinning
+
+```json
+{
+  "dependencies": {
+    "express": "4.18.2",
+    "bcrypt": "5.1.1"
+  },
+  "devDependencies": {
+    "eslint": "8.50.0"
+  }
+}
+```
+
+### Security Automation
+
+```javascript
+// GitHub Actions for automatic audit
+// .github/workflows/security.yml
+name: Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+```
+
+### Best Practices
+
+- Regularly audit dependencies (continuous integration)
+- Quickly update vulnerable components
+- Use automated tools (Snyk, Dependabot)
+- Maintain a dependency inventory
+- Avoid unmaintained dependencies
+- Prefer libraries with an active community
+- Read changelogs before major updates
+- Test after each update
+
+## A07:2021 - Identification and Authentication Failures
+
+### Overview
+
+Formerly "Broken Authentication", this category covers weaknesses in identification and authentication mechanisms.
+
+### Common Vulnerabilities
+
+#### Weak Passwords
+
+```javascript
+// Protection: Strength validation
+const zxcvbn = require('zxcvbn');
+
+function validatePasswordStrength(password) {
+    const result = zxcvbn(password);
+    
+    if (result.score < 3) {
+        return {
+            valid: false,
+            score: result.score,
+            feedback: result.feedback.suggestions
+        };
+    }
+    
+    return {
+        valid: true,
+        score: result.score
+    };
+}
+
+const passwordSchema = z.string()
+    .min(12)
+    .regex(/[a-z]/)
+    .regex(/[A-Z]/)
+    .regex(/[0-9]/)
+    .regex(/[^a-zA-Z0-9]/)
+    .refine((pwd) => validatePasswordStrength(pwd).valid, {
+        message: 'Password too weak'
+    });
+```
+
+#### Brute Force Attacks
+
+```javascript
+class BruteForceProtection {
+    constructor(redis) {
+        this.redis = redis;
+        this.maxAttempts = 5;
+        this.windowMs = 15 * 60 * 1000;
+        this.lockoutDuration = 30 * 60 * 1000;
+    }
+    
+    async recordFailedAttempt(identifier, ipAddress) {
+        const key = `login:attempts:${identifier}:${ipAddress}`;
+        const attempts = await this.redis.incr(key);
+        
+        if (attempts === 1) {
+            await this.redis.expire(key, Math.floor(this.windowMs / 1000));
+        }
+        
+        if (attempts >= this.maxAttempts) {
+            await this.lockAccount(identifier);
+        }
+        
+        return attempts;
+    }
+    
+    async isLocked(identifier) {
+        const lockKey = `login:lock:${identifier}`;
+        const locked = await this.redis.get(lockKey);
+        return locked !== null;
+    }
+    
+    async lockAccount(identifier) {
+        const lockKey = `login:lock:${identifier}`;
+        await this.redis.setex(lockKey, Math.floor(this.lockoutDuration / 1000), '1');
+    }
+    
+    async clearFailedAttempts(identifier, ipAddress) {
+        const key = `login:attempts:${identifier}:${ipAddress}`;
+        await this.redis.del(key);
+    }
+}
+```
+
+#### Session Fixation
+
+```javascript
+// Protection: Session regeneration after login
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = await authenticateUser(username, password);
+    
+    if (user) {
+        req.session.regenerate((err) => {
+            if (err) {
+                return res.status(500).json({ error: 'Session error' });
+            }
+            
+            req.session.userId = user.id;
+            req.session.role = user.role;
+            
+            res.json({ token: generateToken(user) });
+        });
+    } else {
+        res.status(401).json({ error: 'Invalid credentials' });
+    }
+});
+```
+
+#### Multi-Factor Authentication
+
+```javascript
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
+
+class MFAService {
+    generateSecret(userId) {
+        const secret = speakeasy.generateSecret({
+            name: `App (${userId})`,
+            issuer: 'MyApp'
+        });
+        
+        return {
+            secret: secret.base32,
+            qrCode: QRCode.toDataURL(secret.otpauth_url)
+        };
+    }
+    
+    verifyToken(secret, token) {
+        return speakeasy.totp.verify({
+            secret: secret,
+            encoding: 'base32',
+            token: token,
+            window: 2
+        });
+    }
+    
+    async requireMFA(userId) {
+        const user = await db.getUser(userId);
+        return user.mfaEnabled && !user.mfaVerified;
+    }
+}
+```
+
+### Best Practices
+
+- Implement multi-factor authentication (2FA/MFA)
+- Use strong passwords with validation
+- Implement rate limiting on authentication endpoints
+- Protect against brute force attacks
+- Regenerate sessions after login
+- Implement session revocation
+- Use tokens with short expiration
+- Implement secure logout
+- Log all authentication attempts
+- Never expose revealing error messages
+
+## A08:2021 - Software and Data Integrity Failures
+
+### Overview
+
+This category covers failures in verifying software and data integrity, including supply chain attacks.
+
+### Common Vulnerabilities
+
+#### Absence of Integrity Verification
+
+```javascript
+// Vulnerable: Download without verification
+app.get('/api/download/:fileId', async (req, res) => {
+    const file = await db.getFile(req.params.fileId);
+    const fileContent = await fs.readFile(file.path);
+    res.send(fileContent);
+});
+
+// Secure: Integrity verification
+const crypto = require('crypto');
+
+app.get('/api/download/:fileId', async (req, res) => {
+    const file = await db.getFile(req.params.fileId);
+    const fileContent = await fs.readFile(file.path);
+    
+    const hash = crypto.createHash('sha256').update(fileContent).digest('hex');
+    
+    if (hash !== file.expectedHash) {
+        return res.status(500).json({ error: 'File integrity check failed' });
+    }
+    
+    res.send(fileContent);
+});
+```
+
+#### Supply Chain Attacks
+
+```javascript
+// Protection: Signature verification
+const { createVerify } = require('crypto');
+const { execSync } = require('child_process');
+
+async function verifyPackageIntegrity(packageName, version) {
+    const packagePath = `node_modules/${packageName}`;
+    
+    if (fs.existsSync(`${packagePath}/.signature`)) {
+        const signature = fs.readFileSync(`${packagePath}/.signature`);
+        const publicKey = fs.readFileSync('trusted-keys/public.pem');
+        
+        const verify = createVerify('SHA256');
+        verify.update(fs.readFileSync(`${packagePath}/package.json`));
+        
+        if (!verify.verify(publicKey, signature, 'hex')) {
+            throw new Error('Package signature verification failed');
+        }
+    }
+}
+```
+
+#### Insecure CI/CD
+
+```yaml
+# .github/workflows/deploy.yml secure
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  security-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Verify commit signature
+        run: |
+          git verify-commit HEAD
+      - name: Run security tests
+        run: |
+          npm audit
+          npm run test:security
+  
+  build:
+    needs: security-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm ci
+      - run: npm run build
+      - name: Sign artifacts
+        run: |
+          gpg --sign build/artifact.tar.gz
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+      - name: Verify artifact signature
+        run: |
+          gpg --verify artifact.tar.gz.sig artifact.tar.gz
+      - name: Deploy
+        run: |
+          # Secure deployment
+```
+
+### Best Practices
+
+- Verify integrity of all critical files
+- Use digital signatures for packages
+- Implement checksums for downloads
+- Secure CI/CD pipelines
+- Verify commit signatures
+- Use verified dependencies
+- Implement real-time integrity verification
+- Log modifications to critical files
+
+## A09:2021 - Security Logging and Monitoring Failures
+
+### Overview
+
+The absence or insufficiency of logging and monitoring prevents detection and response to security incidents.
+
+### Secure Logging Implementation
+
+```javascript
+const winston = require('winston');
+const { createHash } = require('crypto');
+
+class SecurityLogger {
+    constructor() {
+        this.logger = winston.createLogger({
+            level: 'info',
+            format: winston.format.combine(
+                winston.format.timestamp(),
+                winston.format.json()
+            ),
+            transports: [
+                new winston.transports.File({ filename: 'security.log' }),
+                new winston.transports.Console()
+            ]
+        });
+    }
+    
+    sanitize(data) {
+        const sensitive = ['password', 'token', 'secret', 'key', 'ssn', 'creditCard'];
+        const sanitized = { ...data };
+        
+        for (const field of sensitive) {
+            if (sanitized[field]) {
+                sanitized[field] = '[REDACTED]';
+            }
+        }
+        
+        return sanitized;
+    }
+    
+    logSecurityEvent(type, details) {
+        this.logger.info({
+            type: 'security_event',
+            eventType: type,
+            timestamp: new Date().toISOString(),
+            details: this.sanitize(details),
+            severity: this.getSeverity(type)
+        });
+    }
+    
+    logFailedLogin(ipAddress, username, reason) {
+        this.logSecurityEvent('failed_login', {
+            ipAddress,
+            username: this.hashUsername(username),
+            reason
+        });
+    }
+    
+    logSuspiciousActivity(activity, context) {
+        this.logSecurityEvent('suspicious_activity', {
+            activity,
+            context: this.sanitize(context)
+        });
+    }
+    
+    hashUsername(username) {
+        return createHash('sha256').update(username + process.env.USERNAME_SALT).digest('hex').substring(0, 16);
+    }
+    
+    getSeverity(type) {
+        const severityMap = {
+            'failed_login': 'medium',
+            'suspicious_activity': 'high',
+            'unauthorized_access': 'critical',
+            'data_breach': 'critical'
+        };
+        return severityMap[type] || 'low';
+    }
+}
+```
+
+### Real-Time Monitoring
+
+```javascript
+class SecurityMonitor {
+    constructor(logger, alertService) {
+        this.logger = logger;
+        this.alertService = alertService;
+        this.thresholds = {
+            failedLogins: 5,
+            suspiciousRequests: 10,
+            dataAccessAnomalies: 3
+        };
+    }
+    
+    async analyzeLogs() {
+        const recentLogs = await this.getRecentSecurityLogs();
+        
+        const metrics = {
+            failedLogins: this.countEvents(recentLogs, 'failed_login'),
+            suspiciousActivities: this.countEvents(recentLogs, 'suspicious_activity'),
+            unauthorizedAccess: this.countEvents(recentLogs, 'unauthorized_access')
+        };
+        
+        if (metrics.failedLogins > this.thresholds.failedLogins) {
+            await this.alertService.sendAlert({
+                type: 'brute_force_detected',
+                severity: 'high',
+                metrics
+            });
+        }
+        
+        if (metrics.unauthorizedAccess > 0) {
+            await this.alertService.sendAlert({
+                type: 'unauthorized_access_detected',
+                severity: 'critical',
+                metrics
+            });
+        }
+    }
+}
+```
+
+### Best Practices
+
+- Log all security events
+- Never log sensitive data
+- Implement log rotation
+- Centralize logs (ELK, Splunk)
+- Configure alerts for critical events
+- Monitor in real-time
+- Retain logs long enough
+- Regularly analyze logs
+- Implement event correlation
+- Test incident response procedures
+
+## A10:2021 - Server-Side Request Forgery (SSRF)
+
+### Overview
+
+SSRF allows an attacker to force a server to make requests to unauthorized resources, often to internal services.
+
+### Exploitation Mechanisms
+
+```javascript
+// Vulnerable
+app.get('/api/fetch', async (req, res) => {
+    const url = req.query.url;
+    const response = await fetch(url);
+    const data = await response.text();
+    res.send(data);
+});
+
+// Possible attacks:
+// ?url=http://localhost:22 (port scan)
+// ?url=http://169.254.169.254/latest/meta-data/ (AWS metadata)
+// ?url=file:///etc/passwd (local file access)
+// ?url=http://internal-api/admin (internal network access)
+
+// Protection: Validation and whitelist
+const { z } = require('zod');
+const dns = require('dns').promises;
+const { URL } = require('url');
+
+const ALLOWED_PROTOCOLS = ['http:', 'https:'];
+const BLOCKED_IPS = [
+    '127.0.0.1',
+    'localhost',
+    '0.0.0.0',
+    '169.254.169.254',
+    '::1'
+];
+
+const ALLOWED_DOMAINS = [
+    'example.com',
+    'api.example.com'
+];
+
+async function validateURL(urlString) {
+    let url;
+    try {
+        url = new URL(urlString);
+    } catch (error) {
+        throw new Error('Invalid URL');
+    }
+    
+    if (!ALLOWED_PROTOCOLS.includes(url.protocol)) {
+        throw new Error('Protocol not allowed');
+    }
+    
+    const hostname = url.hostname;
+    
+    if (BLOCKED_IPS.includes(hostname)) {
+        throw new Error('IP address not allowed');
+    }
+    
+    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+        throw new Error('Localhost not allowed');
+    }
+    
+    const resolved = await dns.lookup(hostname);
+    
+    if (BLOCKED_IPS.includes(resolved.address)) {
+        throw new Error('Resolved IP not allowed');
+    }
+    
+    if (resolved.address.startsWith('127.') || 
+        resolved.address.startsWith('10.') ||
+        resolved.address.startsWith('172.16.') ||
+        resolved.address.startsWith('192.168.')) {
+        throw new Error('Private IP not allowed');
+    }
+    
+    if (ALLOWED_DOMAINS.length > 0) {
+        const isAllowed = ALLOWED_DOMAINS.some(domain => 
+            hostname === domain || hostname.endsWith('.' + domain)
+        );
+        
+        if (!isAllowed) {
+            throw new Error('Domain not in whitelist');
+        }
+    }
+    
+    return url;
+}
+
+app.get('/api/fetch', async (req, res) => {
+    try {
+        const url = await validateURL(req.query.url);
+        const response = await fetch(url.toString(), {
+            timeout: 5000,
+            headers: {
+                'User-Agent': 'MyApp/1.0'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Request failed');
+        }
+        
+        const data = await response.text();
+        res.send(data);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+```
+
+### Advanced Protection
+
+```javascript
+class SSRFProtection {
+    constructor() {
+        this.blockedSchemes = ['file', 'gopher', 'ldap', 'ldaps'];
+        this.blockedHosts = new Set([
+            'localhost',
+            '127.0.0.1',
+            '0.0.0.0',
+            '169.254.169.254'
+        ]);
+    }
+    
+    async validateAndFetch(urlString, options = {}) {
+        const url = new URL(urlString);
+        
+        if (this.blockedSchemes.includes(url.protocol.slice(0, -1))) {
+            throw new Error('Blocked protocol');
+        }
+        
+        const hostname = url.hostname;
+        const resolved = await dns.lookup(hostname);
+        
+        if (this.isPrivateIP(resolved.address)) {
+            throw new Error('Private IP not allowed');
+        }
+        
+        if (this.blockedHosts.has(hostname) || this.blockedHosts.has(resolved.address)) {
+            throw new Error('Blocked host');
+        }
+        
+        return fetch(urlString, {
+            ...options,
+            redirect: 'manual',
+            timeout: options.timeout || 5000
+        });
+    }
+    
+    isPrivateIP(ip) {
+        return /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(ip) ||
+               ip.startsWith('::1') ||
+               ip.startsWith('fc00:');
+    }
+}
+```
+
+### Best Practices
+
+- Validate and sanitize all URLs
+- Use domain whitelists
+- Block private and local IPs
+- Limit allowed protocols (HTTP/HTTPS only)
+- Implement timeouts
+- Disable automatic redirects
+- Use an isolated network for server requests
+- Log all SSRF requests
+- Regularly test protections
+
+## Conclusion
+
+The OWASP Top 10 2021 is an essential guide for securing web applications. Each vulnerability requires a deep understanding of its mechanisms, exploitation techniques, and protection methods.
+
+**Key Points to Remember:**
+
+1. **Defense in Depth**: Never rely on a single security layer
+2. **Systematic Validation**: Validate all user inputs
+3. **Least Privilege Principle**: Grant only necessary permissions
+4. **Continuous Monitoring**: Detect and respond quickly to incidents
+5. **Regular Updates**: Keep dependencies up to date
+6. **Security by Design**: Integrate security from the start of the project
+
+Implementing these protections, combined with regular security testing and ongoing training, significantly reduces risks for web applications.
+
+## Technical References
+
+- [OWASP Top 10 2021](https://owasp.org/Top10/)
+- [OWASP Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)
+- [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/)
+- RFC 7231 - HTTP/1.1 Semantics and Content
+- RFC 8446 - The Transport Layer Security (TLS) Protocol Version 1.3
+- [CWE Top 25](https://cwe.mitre.org/top25/)
+- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)

@@ -1,0 +1,195 @@
+---
+title: "Essential Network Protocols"
+category: "networks"
+description: "Complete guide on fundamental network protocols, communication security, TLS/SSL, and common vulnerabilities"
+coverImage: "/guides/network.jpg"
+date: "2024-01-25"
+---
+
+# Essential Network Protocols
+
+Understanding network protocols is fundamental to securing communications and detecting threats. This guide covers essential protocols and their security aspects.
+
+## TCP/IP
+
+TCP/IP is the protocol suite that governs the Internet. It is organized in layers according to the OSI model.
+
+### TCP (Transmission Control Protocol)
+
+Connection-oriented transport protocol that guarantees reliable data delivery.
+
+**Characteristics:**
+- **Connection-oriented**: Establishes a connection (3-way handshake) before sending data
+- **Reliability**: Guarantees packet delivery in order
+- **Flow control**: Manages transmission rate to avoid saturation
+- **Congestion control**: Adapts rate according to network state
+
+**TCP Handshake (3-way handshake):**
+1. Client → Server: SYN
+2. Server → Client: SYN-ACK
+3. Client → Server: ACK
+
+### IP (Internet Protocol)
+
+Network layer protocol that manages addressing and packet routing.
+
+**Characteristics:**
+- **Addressing**: Identifies each machine on the network with a unique IP address
+- **Routing**: Routes packets to their destination via routers
+- **Fragmentation**: Divides packets too large to traverse certain networks
+
+**IPv4 vs IPv6:**
+- **IPv4**: 32 bits, ~4.3 billion addresses (exhausted)
+- **IPv6**: 128 bits, quasi-unlimited addresses, built-in security (IPsec)
+
+## Security Protocols
+
+### HTTPS (HTTP Secure)
+
+HTTPS combines HTTP with TLS/SSL to encrypt communications between client and server.
+
+**Advantages:**
+- **Confidentiality**: Data is encrypted, unreadable to interceptors
+- **Integrity**: Detects data modifications in transit
+- **Authentication**: Verifies server identity via certificates
+
+**Default port:** 443
+
+### TLS/SSL Handshake
+
+The TLS handshake establishes a secure connection in several steps:
+
+1. **Client Hello**: Client sends supported TLS versions, cipher suites, and a nonce
+2. **Server Hello**: Server chooses TLS version and cipher suite, sends certificate and nonce
+3. **Certificate verification**: Client verifies certificate validity
+4. **Key exchange**: Generation of symmetric session keys
+5. **Encryption enabled**: Data is now encrypted
+
+**TLS Versions:**
+- **TLS 1.0/1.1**: Obsolete, vulnerable
+- **TLS 1.2**: Current standard, secure
+- **TLS 1.3**: Modern version, faster and more secure
+
+### VPN (Virtual Private Network)
+
+VPNs create an encrypted tunnel between two points, enabling secure communication over an unsecured network.
+
+**VPN Types:**
+- **Site-to-site VPN**: Connects two remote networks
+- **Client-to-site VPN**: Allows a client to access a remote network
+- **Point-to-point VPN**: Direct connection between two points
+
+**VPN Protocols:**
+- **IPsec**: Standard, very secure, complex to configure
+- **OpenVPN**: Open source, flexible, widely used
+- **WireGuard**: Modern, performant, simple configuration
+
+## Routing Protocols
+
+### OSPF (Open Shortest Path First)
+
+Dynamic routing protocol used in internal networks (IGP). Calculates shortest paths based on link costs.
+
+**Characteristics:**
+- Link-state algorithm
+- Fast convergence
+- Supports large networks
+- Authentication possible (MD5, SHA)
+
+### BGP (Border Gateway Protocol)
+
+Protocol used to route traffic between different autonomous systems (AS) on the Internet.
+
+**Characteristics:**
+- External routing protocol (EGP)
+- Used by ISPs and large enterprises
+- Based on routing policies
+- Vulnerable to hijacking attacks
+
+## Network Security
+
+### Firewall
+
+A firewall filters network traffic according to predefined rules to protect a network.
+
+**Filtering Types:**
+- **Port filtering**: Allows or blocks certain ports
+- **IP address filtering**: Controls access by source/destination
+- **State inspection**: Analyzes connection context (stateful)
+- **Application filtering**: Analyzes packet content (deep packet inspection)
+
+**Firewall Types:**
+- **Network firewall**: Filters at network level
+- **Application firewall**: Filters at application level
+- **Personal firewall**: Protects a single computer
+
+### IDS/IPS
+
+- **IDS (Intrusion Detection System)**: Detects suspicious activities and generates alerts
+- **IPS (Intrusion Prevention System)**: Detects and actively blocks threats
+
+**Detection Methods:**
+- **Signature-based**: Detects known attack patterns
+- **Anomaly-based**: Detects abnormal behaviors
+- **Heuristic-based**: Uses rules and heuristics
+
+## Common Vulnerabilities
+
+### Heartbleed (CVE-2014-0160)
+
+Vulnerability in OpenSSL allowing reading server memory. Affected millions of servers in 2014.
+
+**Protection:** Update OpenSSL, revoke and renew certificates.
+
+### POODLE (CVE-2014-3566)
+
+Vulnerability in SSL 3.0 allowing data decryption. Forced servers to use SSL 3.0.
+
+**Protection:** Disable SSL 3.0, use only TLS 1.2+.
+
+### BEAST (CVE-2011-3389)
+
+Vulnerability in TLS 1.0 allowing data decryption. Exploits CBC weaknesses.
+
+**Protection:** Use TLS 1.2+ with secure modes (GCM).
+
+## Secure Configuration
+
+### TLS Recommendations
+
+- Disable obsolete versions (SSL 3.0, TLS 1.0, TLS 1.1)
+- Use TLS 1.2 minimum, TLS 1.3 recommended
+- Choose secure cipher suites (avoid RC4, DES, MD5)
+- Enable HSTS (HTTP Strict Transport Security)
+- Use valid and up-to-date certificates
+
+### Firewall Configuration
+
+- Principle of least privilege: block everything by default, explicitly allow
+- Segment network into trust zones
+- Monitor and log all connections
+- Regularly update rules
+
+### Network Monitoring
+
+- Analyze traffic to detect anomalies
+- Monitor failed connection attempts
+- Detect port scans and attacks
+- Use tools like Wireshark, tcpdump, Suricata
+
+## Best Practices
+
+1. **Use HTTPS** for all sensitive communications
+2. **Properly configure firewalls** with strict rules
+3. **Monitor network traffic** to detect threats
+4. **Regularly update** network equipment and software
+5. **Segment the network** to limit impact of compromise
+6. **Use VPNs** for remote access
+7. **Implement IDS/IPS** to detect and block attacks
+8. **Encrypt communications** even on internal networks
+9. **Regularly audit** security configurations
+10. **Train staff** on network security best practices
+
+## Conclusion
+
+Mastering network protocols is essential to understand and secure communications in a modern IT environment. Network security requires a layered approach: encryption (TLS), filtering (firewall), detection (IDS/IPS), and continuous monitoring. Vulnerabilities like Heartbleed and POODLE remind us of the importance of keeping systems updated and following security configuration best practices.

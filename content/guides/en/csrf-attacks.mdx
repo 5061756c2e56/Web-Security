@@ -1,0 +1,206 @@
+---
+title: "CSRF Attacks: Understanding and Protection"
+category: "web-security"
+description: "Complete guide on Cross-Site Request Forgery attacks, their mechanisms, exploitation examples and protection methods"
+coverImage: "/guides/csrf.jpg"
+date: "2024-01-20"
+---
+
+# CSRF Attacks: Understanding and Protection
+
+CSRF (Cross-Site Request Forgery) attacks are one of the most common and dangerous web vulnerabilities. Classified in the OWASP Top 10, they can allow an attacker to perform unauthorized actions on behalf of an authenticated user.
+
+## What is a CSRF Attack?
+
+A CSRF attack forces an authenticated user to execute unwanted actions on a web application where they are logged in. The attacker exploits the trust that the server places in the user's browser.
+
+### Fundamental Principle
+
+The web server trusts requests that come from a browser with a valid session. It cannot distinguish whether the request was initiated by the legitimate user or by a malicious site.
+
+## How Does a CSRF Attack Work?
+
+### Classic Scenario
+
+1. The user logs into a website (e.g., online bank, social network)
+2. The server establishes a session and sends a session cookie to the browser
+3. Without logging out, the user visits a malicious site
+4. The malicious site contains code that sends a request to the bank's site
+5. The browser automatically sends the session cookie with the request
+6. The bank thinks the request comes from the legitimate user and executes it
+
+### Attack Example
+
+```html
+<!-- Malicious site -->
+<img src="https://bank.com/transfer?to=attacker&amount=1000" />
+```
+
+If the user is logged into their bank, this image will trigger a transfer without their consent.
+
+### More Sophisticated Example
+
+```html
+<form id="csrf-form" action="https://vulnerable-site.com/change-email" method="POST">
+    <input type="hidden" name="email" value="attacker@evil.com">
+</form>
+<script>
+    document.getElementById('csrf-form').submit();
+</script>
+```
+
+## Types of CSRF Attacks
+
+### CSRF GET
+
+GET requests are the easiest to exploit as they can be triggered by a simple `<img>` or `<link>` tag.
+
+### CSRF POST
+
+POST requests require a form, but can be submitted automatically via JavaScript.
+
+### CSRF JSON
+
+JSON requests can be exploited if the application accepts cross-origin requests and doesn't verify the origin.
+
+## Protection Techniques
+
+### 1. CSRF Tokens
+
+Generate a unique, unpredictable token linked to the session for each request. The token must be:
+- Generated server-side
+- Stored in the session
+- Included in each form or request
+- Verified on each state-changing request
+
+**Basic implementation:**
+
+```javascript
+// Token generation
+const csrfToken = crypto.randomBytes(32).toString('hex');
+session.csrfToken = csrfToken;
+
+// Verification
+if (req.body.csrfToken !== session.csrfToken) {
+    return res.status(403).send('Invalid CSRF token');
+}
+```
+
+### 2. SameSite Cookies
+
+The `SameSite` attribute on cookies prevents them from being sent in cross-site requests.
+
+- `SameSite=Strict`: Cookie is never sent in cross-site requests
+- `SameSite=Lax`: Cookie is sent for cross-site GET requests (normal navigation)
+- `SameSite=None`: Cookie is always sent (requires `Secure`)
+
+**Recommended configuration:**
+
+```javascript
+res.cookie('session', sessionId, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict'
+});
+```
+
+### 3. Referer/Origin Verification
+
+Verify that the request comes from the same domain by examining the `Referer` or `Origin` HTTP headers.
+
+**Limitations:**
+- Some browsers or extensions may block these headers
+- Redirects may modify them
+- Doesn't work for requests from mobile applications
+
+### 4. Double Submit Cookie
+
+Send the token both in the cookie and in the form. The server verifies that both values match.
+
+### 5. Custom Headers
+
+Use custom HTTP headers (like `X-Requested-With`) that browsers don't allow to be set via cross-origin JavaScript.
+
+## Framework Protection
+
+### Express.js (Node.js)
+
+```javascript
+const csrf = require('csurf');
+const csrfProtection = csrf({ cookie: true });
+
+app.use(csrfProtection);
+app.get('/form', (req, res) => {
+    res.render('form', { csrfToken: req.csrfToken() });
+});
+```
+
+### Django (Python)
+
+```python
+# In the template
+{% csrf_token %}
+
+# In the view
+from django.views.decorators.csrf import csrf_protect
+
+@csrf_protect
+def my_view(request):
+    # Protected view
+    pass
+```
+
+### Spring Security (Java)
+
+```java
+@EnableWebSecurity
+public class WebSecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) {
+        http.csrf().csrfTokenRepository(
+            CookieCsrfTokenRepository.withHttpOnlyFalse()
+        );
+        return http.build();
+    }
+}
+```
+
+## Bypass Techniques
+
+### Referer Verification Bypass
+
+If Referer verification is poorly implemented (e.g., only checks for substring presence), it can be bypassed.
+
+### CSRF Token Bypass
+
+- If the token is predictable or reusable
+- If the token is not properly linked to the session
+- If validation is disabled for certain routes
+
+### SameSite Bypass
+
+Certain configurations or older browsers may allow SameSite bypass.
+
+## Best Practices
+
+- Always use CSRF tokens for sensitive actions (POST, PUT, DELETE)
+- Implement multiple layers of protection (defense in depth)
+- Use `SameSite=Strict` for session cookies
+- Verify request origin for APIs
+- Regularly test your defenses with tools like OWASP ZAP
+- Train developers on CSRF risks
+- Document protection mechanisms in your code
+
+## Real-World Case Studies
+
+### Social Network Attack
+
+In 2018, a CSRF vulnerability allowed attackers to modify privacy settings of millions of users without their consent.
+
+### Banking Attack
+
+Attackers exploited a CSRF flaw to perform unauthorized transfers using hidden images on popular websites.
+
+## Conclusion
+
+CSRF attacks can have serious consequences: data modification, money transfers, password changes. It is essential to implement appropriate protections from the application development stage. The combination of several techniques (CSRF tokens + SameSite cookies) provides robust protection against these attacks.

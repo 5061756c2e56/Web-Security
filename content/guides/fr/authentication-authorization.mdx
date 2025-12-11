@@ -1,0 +1,879 @@
+---
+title: "Authentification et autorisation - Guide complet"
+category: "web-security"
+description: "Guide expert sur l'authentification et l'autorisation : JWT vs sessions, OAuth 2.0, OIDC, RBAC/ABAC, 2FA/MFA, WebAuthn, gestion des tokens, refresh tokens, bonnes pratiques et implémentations sécurisées."
+coverImage: "/guides/auth.jpg"
+date: "2024-03-16"
+difficulty: "avancé"
+readingTime: "50 min"
+prerequisites: ["Développement web", "Concepts de sécurité", "HTTP/HTTPS"]
+lastUpdated: "2024-12-19"
+---
+
+# Authentification et autorisation - Guide complet
+
+L'authentification et l'autorisation sont deux concepts fondamentaux de la sécurité web. L'authentification répond à la question "Qui êtes-vous ?" tandis que l'autorisation répond à "Que pouvez-vous faire ?". Une implémentation correcte de ces mécanismes est essentielle pour protéger les applications et les données.
+
+## Introduction
+
+### Authentification vs Autorisation
+
+**Authentification** : Vérification de l'identité d'un utilisateur (login, vérification des credentials).
+
+**Autorisation** : Détermination des permissions d'un utilisateur authentifié (accès aux ressources, actions autorisées).
+
+```javascript
+// Authentification : Vérifier qui est l'utilisateur
+async function authenticate(username, password) {
+    const user = await db.findUser(username);
+    if (user && await bcrypt.compare(password, user.password)) {
+        return user;
+    }
+    throw new Error('Invalid credentials');
+}
+
+// Autorisation : Vérifier ce que l'utilisateur peut faire
+async function authorize(user, resource, action) {
+    const permissions = await getPermissions(user.role);
+    return permissions.includes(`${resource}:${action}`);
+}
+```
+
+## Méthodes d'authentification
+
+### 1. Authentification par mot de passe
+
+#### Hachage sécurisé
+
+```javascript
+const bcrypt = require('bcrypt');
+
+async function hashPassword(password) {
+    const saltRounds = 12;
+    return await bcrypt.hash(password, saltRounds);
+}
+
+async function verifyPassword(password, hash) {
+    return await bcrypt.compare(password, hash);
+}
+
+// Alternative : Argon2 (plus résistant aux attaques GPU/ASIC)
+const argon2 = require('argon2');
+
+async function hashPasswordArgon2(password) {
+    return await argon2.hash(password, {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+        parallelism: 4
+    });
+}
+
+async function verifyPasswordArgon2(password, hash) {
+    return await argon2.verify(hash, password);
+}
+```
+
+#### Validation de force
+
+```javascript
+const zxcvbn = require('zxcvbn');
+const { z } = require('zod');
+
+const passwordSchema = z.string()
+    .min(12)
+    .regex(/[a-z]/)
+    .regex(/[A-Z]/)
+    .regex(/[0-9]/)
+    .regex(/[^a-zA-Z0-9]/)
+    .refine((pwd) => {
+        const result = zxcvbn(pwd);
+        return result.score >= 3;
+    }, {
+        message: 'Password too weak'
+    });
+
+async function validatePasswordStrength(password) {
+    const result = zxcvbn(password);
+    
+    if (result.score < 3) {
+        return {
+            valid: false,
+            score: result.score,
+            feedback: result.feedback.suggestions,
+            crackTime: result.crack_times_seconds.offline_slow_hashing_1e4_per_second
+        };
+    }
+    
+    return {
+        valid: true,
+        score: result.score
+    };
+}
+```
+
+### 2. Authentification multi-facteurs (MFA)
+
+#### TOTP (Time-based One-Time Password)
+
+```javascript
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
+
+class MFAService {
+    generateSecret(userId) {
+        const secret = speakeasy.generateSecret({
+            name: `MyApp (${userId})`,
+            issuer: 'MyApp',
+            length: 32
+        });
+        
+        return {
+            secret: secret.base32,
+            qrCode: QRCode.toDataURL(secret.otpauth_url)
+        };
+    }
+    
+    verifyToken(secret, token) {
+        return speakeasy.totp.verify({
+            secret: secret,
+            encoding: 'base32',
+            token: token,
+            window: 2
+        });
+    }
+    
+    async requireMFA(userId) {
+        const user = await db.getUser(userId);
+        return user.mfaEnabled && !user.mfaVerified;
+    }
+}
+
+// Utilisation
+app.post('/api/login', async (req, res) => {
+    const { username, password, mfaToken } = req.body;
+    
+    const user = await authenticateUser(username, password);
+    
+    if (user.mfaEnabled) {
+        if (!mfaToken) {
+            return res.status(401).json({ 
+                error: 'MFA required',
+                mfaRequired: true 
+            });
+        }
+        
+        const mfaService = new MFAService();
+        if (!mfaService.verifyToken(user.mfaSecret, mfaToken)) {
+            return res.status(401).json({ error: 'Invalid MFA token' });
+        }
+    }
+    
+    const token = generateToken(user);
+    res.json({ token });
+});
+```
+
+#### SMS/Email OTP
+
+```javascript
+const crypto = require('crypto');
+
+class OTPService {
+    generateOTP() {
+        return crypto.randomInt(100000, 999999).toString();
+    }
+    
+    async sendOTP(userId, method) {
+        const otp = this.generateOTP();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        
+        await db.storeOTP(userId, otp, expiresAt);
+        
+        if (method === 'sms') {
+            await smsService.send(user.phone, `Your OTP is: ${otp}`);
+        } else if (method === 'email') {
+            await emailService.send(user.email, 'Your OTP', `Your OTP is: ${otp}`);
+        }
+    }
+    
+    async verifyOTP(userId, otp) {
+        const stored = await db.getOTP(userId);
+        
+        if (!stored || stored.expiresAt < new Date()) {
+            return false;
+        }
+        
+        if (stored.otp !== otp) {
+            await db.incrementOTPAttempts(userId);
+            return false;
+        }
+        
+        await db.deleteOTP(userId);
+        return true;
+    }
+}
+```
+
+### 3. WebAuthn / FIDO2
+
+```javascript
+const { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
+
+class WebAuthnService {
+    async generateRegistrationOptions(userId) {
+        const user = await db.getUser(userId);
+        
+        const options = await generateRegistrationOptions({
+            rpName: 'MyApp',
+            rpID: 'myapp.com',
+            userID: user.id,
+            userName: user.email,
+            timeout: 60000,
+            attestationType: 'none',
+            excludeCredentials: [],
+            authenticatorSelection: {
+                authenticatorAttachment: 'platform',
+                userVerification: 'preferred'
+            }
+        });
+        
+        await db.storeChallenge(userId, options.challenge);
+        return options;
+    }
+    
+    async verifyRegistration(userId, response) {
+        const user = await db.getUser(userId);
+        const challenge = await db.getChallenge(userId);
+        
+        const verification = await verifyRegistrationResponse({
+            response,
+            expectedChallenge: challenge,
+            expectedOrigin: 'https://myapp.com',
+            expectedRPID: 'myapp.com'
+        });
+        
+        if (verification.verified) {
+            await db.saveAuthenticator(userId, {
+                credentialID: verification.registrationInfo.credentialID,
+                credentialPublicKey: verification.registrationInfo.credentialPublicKey,
+                counter: verification.registrationInfo.counter
+            });
+        }
+        
+        return verification.verified;
+    }
+    
+    async generateAuthenticationOptions(userId) {
+        const authenticators = await db.getAuthenticators(userId);
+        
+        const options = await generateAuthenticationOptions({
+            rpID: 'myapp.com',
+            allowCredentials: authenticators.map(auth => ({
+                id: auth.credentialID,
+                type: 'public-key'
+            })),
+            userVerification: 'preferred'
+        });
+        
+        await db.storeChallenge(userId, options.challenge);
+        return options;
+    }
+    
+    async verifyAuthentication(userId, response) {
+        const authenticator = await db.getAuthenticator(response.id);
+        const challenge = await db.getChallenge(userId);
+        
+        const verification = await verifyAuthenticationResponse({
+            response,
+            expectedChallenge: challenge,
+            expectedOrigin: 'https://myapp.com',
+            expectedRPID: 'myapp.com',
+            authenticator: {
+                credentialID: authenticator.credentialID,
+                credentialPublicKey: authenticator.credentialPublicKey,
+                counter: authenticator.counter
+            }
+        });
+        
+        if (verification.verified) {
+            await db.updateCounter(authenticator.id, verification.authenticationInfo.newCounter);
+        }
+        
+        return verification.verified;
+    }
+}
+```
+
+## Gestion des sessions
+
+### JWT vs Sessions
+
+#### JWT (JSON Web Tokens)
+
+**Avantages :**
+- Stateless : Pas besoin de stockage serveur
+- Scalable : Facile à distribuer
+- Portable : Utilisable sur plusieurs domaines
+
+**Inconvénients :**
+- Révocation difficile
+- Taille limitée
+- Données exposées (Base64)
+
+```javascript
+const jwt = require('jsonwebtoken');
+
+class JWTService {
+    generateToken(user) {
+        return jwt.sign(
+            {
+                userId: user.id,
+                role: user.role,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: '15m',
+                algorithm: 'HS256',
+                issuer: 'myapp.com',
+                audience: 'myapp.com'
+            }
+        );
+    }
+    
+    generateRefreshToken(userId) {
+        return jwt.sign(
+            { userId, type: 'refresh' },
+            process.env.JWT_REFRESH_SECRET,
+            {
+                expiresIn: '7d',
+                algorithm: 'HS256'
+            }
+        );
+    }
+    
+    verifyToken(token) {
+        try {
+            return jwt.verify(token, process.env.JWT_SECRET, {
+                algorithms: ['HS256'],
+                issuer: 'myapp.com',
+                audience: 'myapp.com'
+            });
+        } catch (error) {
+            throw new Error('Invalid token');
+        }
+    }
+    
+    async refreshAccessToken(refreshToken) {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        
+        const isRevoked = await db.isTokenRevoked(refreshToken);
+        if (isRevoked) {
+            throw new Error('Token revoked');
+        }
+        
+        const user = await db.getUser(decoded.userId);
+        return this.generateToken(user);
+    }
+}
+```
+
+#### Sessions serveur
+
+**Avantages :**
+- Révocation facile
+- Contrôle total
+- Pas de données exposées
+
+**Inconvénients :**
+- Stateful : Nécessite un stockage
+- Scalabilité plus complexe
+- Gestion de la session nécessaire
+
+```javascript
+const express = require('express');
+const session = require('express-session');
+const RedisStore = require('connect-redis')(session);
+const redis = require('redis');
+
+const redisClient = redis.createClient({
+    host: 'localhost',
+    port: 6379
+});
+
+app.use(session({
+    store: new RedisStore({ client: redisClient }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    name: 'sessionId',
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000
+    }
+}));
+
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = await authenticateUser(username, password);
+    
+    req.session.regenerate((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Session error' });
+        }
+        
+        req.session.userId = user.id;
+        req.session.role = user.role;
+        req.session.loginTime = Date.now();
+        
+        res.json({ success: true });
+    });
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Logout failed' });
+        }
+        res.clearCookie('sessionId');
+        res.json({ success: true });
+    });
+});
+```
+
+## OAuth 2.0
+
+OAuth 2.0 est un protocole d'autorisation permettant à des applications tierces d'accéder à des ressources utilisateur.
+
+### Flux Authorization Code
+
+```javascript
+const express = require('express');
+const axios = require('axios');
+
+class OAuth2Service {
+    constructor(clientId, clientSecret, redirectUri) {
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        this.redirectUri = redirectUri;
+        this.authorizationServer = 'https://oauth.provider.com';
+    }
+    
+    getAuthorizationUrl(state) {
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: this.clientId,
+            redirect_uri: this.redirectUri,
+            scope: 'read write',
+            state: state
+        });
+        
+        return `${this.authorizationServer}/authorize?${params}`;
+    }
+    
+    async exchangeCodeForToken(code) {
+        const response = await axios.post(
+            `${this.authorizationServer}/token`,
+            {
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: this.redirectUri,
+                client_id: this.clientId,
+                client_secret: this.clientSecret
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+        
+        return {
+            accessToken: response.data.access_token,
+            refreshToken: response.data.refresh_token,
+            expiresIn: response.data.expires_in
+        };
+    }
+    
+    async refreshToken(refreshToken) {
+        const response = await axios.post(
+            `${this.authorizationServer}/token`,
+            {
+                grant_type: 'refresh_token',
+                refresh_token: refreshToken,
+                client_id: this.clientId,
+                client_secret: this.clientSecret
+            }
+        );
+        
+        return response.data;
+    }
+}
+
+app.get('/api/oauth/authorize', (req, res) => {
+    const state = crypto.randomBytes(32).toString('hex');
+    req.session.oauthState = state;
+    
+    const oauth = new OAuth2Service(
+        process.env.OAUTH_CLIENT_ID,
+        process.env.OAUTH_CLIENT_SECRET,
+        'https://myapp.com/api/oauth/callback'
+    );
+    
+    const authUrl = oauth.getAuthorizationUrl(state);
+    res.redirect(authUrl);
+});
+
+app.get('/api/oauth/callback', async (req, res) => {
+    const { code, state } = req.query;
+    
+    if (state !== req.session.oauthState) {
+        return res.status(400).json({ error: 'Invalid state' });
+    }
+    
+    const oauth = new OAuth2Service(
+        process.env.OAUTH_CLIENT_ID,
+        process.env.OAUTH_CLIENT_SECRET,
+        'https://myapp.com/api/oauth/callback'
+    );
+    
+    const tokens = await oauth.exchangeCodeForToken(code);
+    
+    req.session.accessToken = tokens.accessToken;
+    req.session.refreshToken = tokens.refreshToken;
+    
+    res.redirect('/dashboard');
+});
+```
+
+### Flux Client Credentials (Machine-to-Machine)
+
+```javascript
+async function getClientCredentialsToken() {
+    const response = await axios.post(
+        'https://oauth.provider.com/token',
+        {
+            grant_type: 'client_credentials',
+            client_id: process.env.CLIENT_ID,
+            client_secret: process.env.CLIENT_SECRET,
+            scope: 'api:read api:write'
+        }
+    );
+    
+    return response.data.access_token;
+}
+```
+
+## OpenID Connect (OIDC)
+
+OIDC est une couche d'identité construite sur OAuth 2.0.
+
+```javascript
+const { Issuer } = require('openid-client');
+
+async function setupOIDC() {
+    const issuer = await Issuer.discover('https://oidc.provider.com');
+    
+    const client = new issuer.Client({
+        client_id: process.env.OIDC_CLIENT_ID,
+        client_secret: process.env.OIDC_CLIENT_SECRET,
+        redirect_uris: ['https://myapp.com/api/oidc/callback'],
+        response_types: ['code']
+    });
+    
+    return client;
+}
+
+app.get('/api/oidc/login', async (req, res) => {
+    const client = await setupOIDC();
+    const state = crypto.randomBytes(32).toString('hex');
+    const nonce = crypto.randomBytes(32).toString('hex');
+    
+    req.session.oidcState = state;
+    req.session.oidcNonce = nonce;
+    
+    const authUrl = client.authorizationUrl({
+        scope: 'openid profile email',
+        state: state,
+        nonce: nonce
+    });
+    
+    res.redirect(authUrl);
+});
+
+app.get('/api/oidc/callback', async (req, res) => {
+    const { code, state } = req.query;
+    
+    if (state !== req.session.oidcState) {
+        return res.status(400).json({ error: 'Invalid state' });
+    }
+    
+    const client = await setupOIDC();
+    const tokenSet = await client.callback(
+        'https://myapp.com/api/oidc/callback',
+        { code },
+        { state, nonce: req.session.oidcNonce }
+    );
+    
+    const userInfo = await client.userinfo(tokenSet.access_token);
+    
+    req.session.userId = userInfo.sub;
+    req.session.email = userInfo.email;
+    
+    res.redirect('/dashboard');
+});
+```
+
+## Autorisation
+
+### RBAC (Role-Based Access Control)
+
+```javascript
+class RBACService {
+    constructor() {
+        this.roles = {
+            user: ['read:own', 'write:own'],
+            moderator: ['read:own', 'write:own', 'read:all', 'moderate'],
+            admin: ['read:all', 'write:all', 'moderate', 'admin']
+        };
+    }
+    
+    hasPermission(role, resource, action) {
+        const rolePerms = this.roles[role] || [];
+        const required = `${action}:${resource}`;
+        return rolePerms.includes(required) || rolePerms.includes('admin');
+    }
+    
+    async checkAccess(user, resource, action) {
+        const userRole = user.role;
+        return this.hasPermission(userRole, resource, action);
+    }
+}
+
+// Middleware
+function requirePermission(resource, action) {
+    return async (req, res, next) => {
+        const rbac = new RBACService();
+        const hasAccess = await rbac.checkAccess(req.user, resource, action);
+        
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        
+        next();
+    };
+}
+
+app.get('/api/admin/users', 
+    authenticate,
+    requirePermission('users', 'read:all'),
+    async (req, res) => {
+        const users = await db.getAllUsers();
+        res.json(users);
+    }
+);
+```
+
+### ABAC (Attribute-Based Access Control)
+
+```javascript
+class ABACService {
+    async evaluatePolicy(policy, user, resource, action, context) {
+        if (policy.action !== action) {
+            return false;
+        }
+        
+        if (policy.condition === 'owner') {
+            return resource.ownerId === user.id;
+        }
+        
+        if (policy.condition === 'role') {
+            return user.roles.includes(policy.role);
+        }
+        
+        if (policy.condition === 'attribute') {
+            return this.checkAttribute(user, resource, policy.attribute, context);
+        }
+        
+        if (policy.condition === 'time') {
+            return this.checkTime(policy.timeRange);
+        }
+        
+        if (policy.condition === 'location') {
+            return this.checkLocation(user.location, policy.allowedLocations);
+        }
+        
+        return false;
+    }
+    
+    checkAttribute(user, resource, attribute, context) {
+        switch (attribute.type) {
+            case 'user.department':
+                return user.department === attribute.value;
+            case 'resource.classification':
+                return resource.classification === attribute.value;
+            case 'context.ip':
+                return context.ipAddress.startsWith(attribute.value);
+            default:
+                return false;
+        }
+    }
+    
+    async canAccess(user, resource, action, context) {
+        const policies = await this.getPolicies(resource.type);
+        
+        for (const policy of policies) {
+            if (await this.evaluatePolicy(policy, user, resource, action, context)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+}
+```
+
+## Protection contre les attaques
+
+### Rate Limiting
+
+```javascript
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+const redis = require('redis');
+
+const redisClient = redis.createClient();
+
+const loginLimiter = rateLimit({
+    store: new RedisStore({
+        client: redisClient,
+        prefix: 'rl:login:'
+    }),
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: 'Too many login attempts, please try again later',
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+app.post('/api/login', loginLimiter, async (req, res) => {
+    // Login logic
+});
+```
+
+### Protection contre le brute force
+
+```javascript
+class BruteForceProtection {
+    constructor(redis) {
+        this.redis = redis;
+        this.maxAttempts = 5;
+        this.windowMs = 15 * 60 * 1000;
+        this.lockoutDuration = 30 * 60 * 1000;
+    }
+    
+    async recordFailedAttempt(identifier, ipAddress) {
+        const key = `login:attempts:${identifier}:${ipAddress}`;
+        const attempts = await this.redis.incr(key);
+        
+        if (attempts === 1) {
+            await this.redis.expire(key, Math.floor(this.windowMs / 1000));
+        }
+        
+        if (attempts >= this.maxAttempts) {
+            await this.lockAccount(identifier);
+        }
+        
+        return attempts;
+    }
+    
+    async isLocked(identifier) {
+        const lockKey = `login:lock:${identifier}`;
+        const locked = await this.redis.get(lockKey);
+        return locked !== null;
+    }
+    
+    async lockAccount(identifier) {
+        const lockKey = `login:lock:${identifier}`;
+        await this.redis.setex(lockKey, Math.floor(this.lockoutDuration / 1000), '1');
+    }
+    
+    async clearFailedAttempts(identifier, ipAddress) {
+        const key = `login:attempts:${identifier}:${ipAddress}`;
+        await this.redis.del(key);
+    }
+}
+```
+
+### Session fixation
+
+```javascript
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = await authenticateUser(username, password);
+    
+    req.session.regenerate((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Session error' });
+        }
+        
+        req.session.userId = user.id;
+        req.session.role = user.role;
+        req.session.loginTime = Date.now();
+        req.session.ipAddress = req.ip;
+        req.session.userAgent = req.get('user-agent');
+        
+        res.json({ success: true });
+    });
+});
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser des mots de passe forts avec validation
+- [ ] Hacher les mots de passe avec bcrypt ou Argon2
+- [ ] Implémenter l'authentification multi-facteurs (2FA/MFA)
+- [ ] Utiliser HTTPS pour toutes les communications
+- [ ] Implémenter le rate limiting sur les endpoints d'authentification
+- [ ] Protéger contre les attaques par force brute
+- [ ] Régénérer les sessions après login
+- [ ] Utiliser des tokens avec expiration courte
+- [ ] Implémenter les refresh tokens
+- [ ] Valider tous les tokens
+- [ ] Logger toutes les tentatives d'authentification
+- [ ] Implémenter la révocation de session/token
+- [ ] Utiliser des cookies HttpOnly et Secure
+- [ ] Implémenter SameSite sur les cookies
+- [ ] Ne jamais exposer les messages d'erreur révélateurs
+- [ ] Vérifier les tokens à chaque requête
+- [ ] Implémenter le principe du moindre privilège
+- [ ] Utiliser OAuth 2.0 pour les intégrations tierces
+- [ ] Valider les scopes OAuth
+- [ ] Implémenter l'audit des accès
+
+## Conclusion
+
+L'authentification et l'autorisation sont des composants critiques de la sécurité web. Une implémentation correcte nécessite :
+
+1. **Authentification robuste** : Mots de passe forts, MFA, WebAuthn
+2. **Gestion sécurisée des sessions** : JWT ou sessions serveur selon les besoins
+3. **Autorisation granulaire** : RBAC ou ABAC selon la complexité
+4. **Protection contre les attaques** : Rate limiting, brute force protection
+5. **Standards modernes** : OAuth 2.0, OIDC pour les intégrations
+
+Une approche en couches combinant ces techniques offre une sécurité robuste.
+
+## Références techniques
+
+- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+- [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+- [RFC 7519 - JSON Web Token (JWT)](https://tools.ietf.org/html/rfc7519)
+- [RFC 6749 - OAuth 2.0](https://tools.ietf.org/html/rfc6749)
+- [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html)
+- [WebAuthn Specification](https://www.w3.org/TR/webauthn/)
+- [NIST Digital Identity Guidelines](https://pages.nist.gov/800-63-3/)

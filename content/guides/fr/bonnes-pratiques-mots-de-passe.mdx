@@ -1,0 +1,457 @@
+---
+title: "Bonnes pratiques pour les mots de passe - Guide complet"
+category: "best-practices"
+description: "Guide expert pour créer, gérer et sécuriser des mots de passe : création de mots de passe forts, phrases de passe, gestionnaires de mots de passe, hachage sécurisé, 2FA/MFA, attaques et protections, politiques de sécurité et bonnes pratiques."
+coverImage: "/guides/password.jpg"
+date: "2024-02-05"
+difficulty: "intermédiaire"
+readingTime: "45 min"
+prerequisites: ["Concepts de sécurité", "Cryptographie de base"]
+lastUpdated: "2024-12-19"
+---
+
+# Bonnes pratiques pour les mots de passe - Guide complet
+
+Les mots de passe sont la première ligne de défense pour protéger vos comptes. Malgré l'émergence de l'authentification sans mot de passe (WebAuthn), ils restent largement utilisés et nécessitent une gestion rigoureuse pour assurer la sécurité.
+
+## Introduction
+
+Un mot de passe fort est la base de la sécurité des comptes en ligne. Cependant, la création et la gestion de mots de passe sécurisés peuvent être complexes. Ce guide couvre toutes les aspects essentiels pour une gestion sécurisée des mots de passe.
+
+## Créer un mot de passe fort
+
+### Caractéristiques d'un bon mot de passe
+
+- **Longueur minimale** : Au moins 12 caractères, idéalement 16 ou plus
+- **Complexité** : Mélange de majuscules, minuscules, chiffres et caractères spéciaux
+- **Unicité** : Un mot de passe différent pour chaque compte
+- **Imprévisibilité** : Éviter les mots du dictionnaire, les informations personnelles, les séquences prévisibles
+
+### Calcul de l'entropie
+
+L'entropie mesure l'imprévisibilité d'un mot de passe. Plus l'entropie est élevée, plus le mot de passe est résistant aux attaques par force brute.
+
+**Formule :** Entropie = log₂(alphabet_size^length)
+
+**Exemple :** Un mot de passe de 12 caractères utilisant 94 caractères possibles a une entropie de log₂(94¹²) ≈ 79 bits.
+
+### Exemple de mot de passe fort
+
+```
+Tr0ub@dor&3
+```
+
+Ce mot de passe contient :
+- 12 caractères
+- Majuscules et minuscules
+- Chiffres
+- Caractères spéciaux
+- Pas de mots du dictionnaire évidents
+
+**Entropie :** ~70 bits (bon niveau de sécurité)
+
+### ⚠️ Mots de passe à éviter
+
+```javascript
+const badPasswords = [
+    'password',
+    '12345678',
+    'qwerty',
+    'admin',
+    'letmein',
+    'welcome',
+    'monkey',
+    '1234567890',
+    'password123',
+    'iloveyou'
+];
+```
+
+## Phrases de passe (Passphrases)
+
+Une alternative aux mots de passe complexes : utiliser plusieurs mots aléatoires.
+
+### Avantages
+
+- Plus facile à retenir qu'un mot de passe complexe
+- Généralement plus long, donc plus sécurisé
+- Moins susceptible d'être oublié
+- Entropie élevée avec des mots simples
+
+### Exemple
+
+```
+Chien-Rouge-Sauter-Table-42!
+```
+
+Cette phrase de passe :
+- Contient 5 mots + chiffre + caractère spécial
+- Longueur : 28 caractères
+- Entropie : ~100 bits (excellent niveau de sécurité)
+- Facile à retenir
+
+### Génération de phrases de passe
+
+Utiliser des listes de mots aléatoires (diceware) pour générer des phrases de passe sécurisées.
+
+```javascript
+class PassphraseGenerator {
+    constructor(wordList) {
+        this.wordList = wordList || this.getDicewareWordList();
+    }
+    
+    generate(wordCount = 5) {
+        const words = [];
+        const crypto = require('crypto');
+        
+        for (let i = 0; i < wordCount; i++) {
+            const randomIndex = crypto.randomInt(0, this.wordList.length);
+            words.push(this.wordList[randomIndex]);
+        }
+        
+        return words.join('-');
+    }
+    
+    getDicewareWordList() {
+        return [
+            'correct', 'horse', 'battery', 'staple',
+            'apple', 'banana', 'cherry', 'date',
+            'elephant', 'giraffe', 'hippo', 'jaguar'
+        ];
+    }
+}
+```
+
+Choisir au moins 5-6 mots pour une sécurité suffisante.
+
+## Gestionnaires de mots de passe
+
+### Avantages
+
+- Génération de mots de passe complexes et uniques
+- Stockage sécurisé et chiffré
+- Remplissage automatique (réduit le risque de phishing)
+- Synchronisation entre appareils
+- Audit de sécurité (détection de mots de passe faibles ou réutilisés)
+
+### Recommandations
+
+- Utiliser un gestionnaire de mots de passe réputé (Bitwarden, 1Password, KeePass)
+- Activer l'authentification à deux facteurs sur le gestionnaire
+- Sauvegarder régulièrement la base de données
+- Utiliser un mot de passe maître fort et unique
+- Ne jamais partager le mot de passe maître
+
+### Gestionnaires recommandés
+
+#### Bitwarden
+
+- Open source
+- Gratuit (version de base)
+- Multiplateforme
+- Synchronisation cloud
+
+#### 1Password
+
+- Interface intuitive
+- Fonctionnalités avancées
+- Support client excellent
+- Payant
+
+#### KeePass
+
+- Open source
+- Stockage local
+- Contrôle total
+- Gratuit
+
+## Hachage et stockage des mots de passe
+
+### Ne jamais stocker en clair
+
+Les mots de passe doivent **toujours** être hachés avant stockage. En cas de fuite de données, les hachages ne révèlent pas les mots de passe originaux.
+
+```javascript
+// ❌ Vulnérable
+const user = {
+    username: 'john',
+    password: 'myPassword123'
+};
+
+// ✅ Correct
+const bcrypt = require('bcrypt');
+const user = {
+    username: 'john',
+    passwordHash: await bcrypt.hash('myPassword123', 12)
+};
+```
+
+### Algorithmes de hachage
+
+#### À éviter
+
+- **MD5** : Vulnérable, collisions faciles
+- **SHA-1** : Obsolète, vulnérable aux collisions
+- **SHA-256/SHA-512** : Trop rapides, vulnérables aux attaques par force brute
+
+#### Recommandés
+
+- **bcrypt** : Algorithme adaptatif, ralentit avec le temps
+- **Argon2** : Gagnant du Password Hashing Competition, résistant aux attaques GPU/ASIC
+- **scrypt** : Conçu pour être coûteux en mémoire
+- **PBKDF2** : Standard NIST, moins performant qu'Argon2 mais largement supporté
+
+### Salage (Salting)
+
+Ajouter un sel unique à chaque mot de passe avant le hachage empêche l'utilisation de tables arc-en-ciel.
+
+**Bonnes pratiques :**
+- Générer un sel aléatoire unique pour chaque mot de passe
+- Longueur minimale : 16 bytes (128 bits)
+- Stocker le sel avec le hachage (pas de secret)
+
+```javascript
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+
+async function hashPassword(password) {
+    const saltRounds = 12;
+    const hash = await bcrypt.hash(password, saltRounds);
+    return hash;
+}
+
+async function verifyPassword(password, hash) {
+    return await bcrypt.compare(password, hash);
+}
+```
+
+## Authentification à deux facteurs (2FA)
+
+L'ajout d'un second facteur d'authentification renforce considérablement la sécurité, même si le mot de passe est compromis.
+
+### Types de facteurs
+
+- **Quelque chose que vous savez** : Mot de passe, PIN
+- **Quelque chose que vous avez** : Téléphone, clé USB (YubiKey), application d'authentification
+- **Quelque chose que vous êtes** : Biométrie (empreinte digitale, reconnaissance faciale)
+
+### Méthodes 2FA
+
+#### TOTP (Time-based One-Time Password)
+
+Applications comme Google Authenticator, Authy.
+
+```javascript
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
+
+function setup2FA(userId) {
+    const secret = speakeasy.generateSecret({
+        name: `MyApp (${userId})`,
+        issuer: 'MyApp'
+    });
+    
+    return {
+        secret: secret.base32,
+        qrCode: QRCode.toDataURL(secret.otpauth_url)
+    };
+}
+
+function verify2FA(token, secret) {
+    return speakeasy.totp.verify({
+        secret: secret,
+        encoding: 'base32',
+        token: token,
+        window: 2
+    });
+}
+```
+
+#### SMS
+
+Moins sécurisé (vulnérable au SIM swapping).
+
+#### Clés de sécurité
+
+FIDO2/WebAuthn, plus sécurisé.
+
+#### Push notifications
+
+Confortable mais nécessite une connexion Internet.
+
+## Attaques sur les mots de passe
+
+### Force brute
+
+Tentative systématique de toutes les combinaisons possibles.
+
+**Protection :**
+- Mots de passe longs et complexes
+- Limitation des tentatives
+- Rate limiting
+- Lockout de compte
+
+```javascript
+class BruteForceProtection {
+    constructor(redis) {
+        this.redis = redis;
+        this.maxAttempts = 5;
+        this.windowMs = 15 * 60 * 1000;
+    }
+    
+    async recordFailedAttempt(identifier) {
+        const key = `login:attempts:${identifier}`;
+        const attempts = await this.redis.incr(key);
+        
+        if (attempts === 1) {
+            await this.redis.expire(key, Math.floor(this.windowMs / 1000));
+        }
+        
+        if (attempts >= this.maxAttempts) {
+            await this.lockAccount(identifier);
+        }
+        
+        return attempts;
+    }
+}
+```
+
+### Attaque par dictionnaire
+
+Essai de mots courants et variations.
+
+**Protection :**
+- Éviter les mots du dictionnaire
+- Utiliser des phrases de passe aléatoires
+- Validation de force
+
+### Tables arc-en-ciel (Rainbow tables)
+
+Tables précalculées de hachages.
+
+**Protection :** Salage unique pour chaque mot de passe.
+
+### Attaque par canal auxiliaire
+
+Exploitation de fuites d'information (temps de réponse, consommation d'énergie).
+
+**Protection :** Comparaison à temps constant, implémentations sécurisées.
+
+### Ingénierie sociale
+
+Manipulation pour obtenir le mot de passe.
+
+**Protection :** Formation, sensibilisation, 2FA.
+
+## Politiques de mots de passe
+
+### Recommandations NIST
+
+- **Longueur minimale** : 8 caractères (12+ recommandé)
+- **Complexité** : Optionnelle si longueur suffisante
+- **Rotation** : Non recommandée sauf compromission
+- **Vérification** : Comparer avec listes de mots de passe compromis
+
+### Politiques d'entreprise
+
+- Exiger des mots de passe d'au moins 12 caractères
+- Interdire les mots de passe communs
+- Forcer l'utilisation d'un gestionnaire de mots de passe
+- Implémenter 2FA pour les comptes sensibles
+- Auditer régulièrement les mots de passe
+
+```javascript
+class PasswordPolicy {
+    validate(password) {
+        const errors = [];
+        
+        if (password.length < 12) {
+            errors.push('Password must be at least 12 characters');
+        }
+        
+        if (!/[a-z]/.test(password)) {
+            errors.push('Password must contain lowercase letters');
+        }
+        
+        if (!/[A-Z]/.test(password)) {
+            errors.push('Password must contain uppercase letters');
+        }
+        
+        if (!/[0-9]/.test(password)) {
+            errors.push('Password must contain digits');
+        }
+        
+        if (!/[^a-zA-Z0-9]/.test(password)) {
+            errors.push('Password must contain special characters');
+        }
+        
+        const commonPasswords = ['password', '123456', 'qwerty'];
+        if (commonPasswords.some(cp => password.toLowerCase().includes(cp))) {
+            errors.push('Password contains common words');
+        }
+        
+        return {
+            valid: errors.length === 0,
+            errors
+        };
+    }
+}
+```
+
+## Erreurs à éviter
+
+### ❌ À ne jamais faire
+
+- Réutiliser le même mot de passe sur plusieurs sites
+- Partager ses mots de passe
+- Les stocker en clair (même dans un fichier texte)
+- Utiliser des informations personnelles (nom, date de naissance)
+- Les écrire sur papier non sécurisé
+- Les envoyer par email ou messagerie
+- Utiliser des mots de passe par défaut
+
+### ✅ Bonnes habitudes
+
+- Utiliser un gestionnaire de mots de passe
+- Activer le 2FA partout où c'est possible
+- Changer les mots de passe par défaut immédiatement
+- Vérifier régulièrement les fuites de données (Have I Been Pwned)
+- Utiliser des phrases de passe longues
+- Générer des mots de passe aléatoires pour chaque compte
+
+## Vérification de fuites
+
+Utilisez des services comme **Have I Been Pwned** pour vérifier si vos comptes ont été compromis lors de fuites de données.
+
+```javascript
+const axios = require('axios');
+
+async function checkPasswordBreach(password) {
+    const hash = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
+    const prefix = hash.substring(0, 5);
+    const suffix = hash.substring(5);
+    
+    const response = await axios.get(`https://api.pwnedpasswords.com/range/${prefix}`);
+    const hashes = response.data.split('\n');
+    
+    for (const line of hashes) {
+        const [hashSuffix, count] = line.split(':');
+        if (hashSuffix === suffix) {
+            return { breached: true, count: parseInt(count) };
+        }
+    }
+    
+    return { breached: false };
+}
+```
+
+## Conclusion
+
+La sécurité des mots de passe est cruciale pour protéger vos comptes. En suivant ces bonnes pratiques - utiliser un gestionnaire de mots de passe, activer le 2FA, et utiliser des mots de passe longs et uniques - vous protégez efficacement vos comptes contre la plupart des attaques. La combinaison d'un mot de passe fort et du 2FA offre une protection robuste même en cas de compromission du mot de passe.
+
+## Références techniques
+
+- [NIST SP 800-63B - Digital Identity Guidelines](https://pages.nist.gov/800-63-3/)
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [Have I Been Pwned](https://haveibeenpwned.com/)
+- [Diceware Passphrase](https://theworld.com/~reinhold/diceware.html)

@@ -1,0 +1,630 @@
+---
+title: "Certificats SSL/TLS et PKI - Guide complet"
+category: "web-security"
+description: "Guide expert sur les certificats X.509, PKI, chaîne de confiance, validation, types de certificats (DV/OV/EV), vulnérabilités, certificate pinning, gestion des certificats et bonnes pratiques."
+coverImage: "/guides/certificates.jpg"
+date: "2024-03-12"
+difficulty: "avancé"
+readingTime: "40 min"
+prerequisites: ["Cryptographie asymétrique", "HTTPS/TLS", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Certificats SSL/TLS et PKI - Guide complet
+
+Les certificats X.509 sont au cœur de l'infrastructure de sécurité web moderne. Ils permettent l'authentification des serveurs et le chiffrement des communications via TLS/SSL. Comprendre leur fonctionnement, leur validation et leurs vulnérabilités est essentiel pour sécuriser les applications web.
+
+## Introduction
+
+Un certificat numérique est un document électronique qui lie une clé publique à une identité (personne, organisation, serveur). Dans le contexte web, les certificats SSL/TLS authentifient les serveurs et permettent le chiffrement des communications.
+
+### PKI (Public Key Infrastructure)
+
+La PKI est l'ensemble des composants nécessaires pour gérer les certificats :
+
+- **Autorités de certification (CA)** : Émettent et signent les certificats
+- **Autorités d'enregistrement (RA)** : Vérifient les identités avant l'émission
+- **Répertoires** : Stockent les certificats et les listes de révocation
+- **Systèmes de révocation** : Gèrent les certificats révoqués (CRL, OCSP)
+
+## Structure X.509
+
+### Composants d'un certificat
+
+```javascript
+const forge = require('node-forge');
+
+const cert = forge.pki.certificateFromPem(certPem);
+
+console.log('Version:', cert.version);
+console.log('Serial Number:', cert.serialNumber);
+console.log('Subject:', cert.subject);
+console.log('Issuer:', cert.issuer);
+console.log('Valid From:', cert.validity.notBefore);
+console.log('Valid To:', cert.validity.notAfter);
+console.log('Public Key:', cert.publicKey);
+console.log('Signature:', cert.signature);
+```
+
+### Champs principaux
+
+#### Subject (Sujet)
+
+Identifie l'entité certifiée :
+
+```
+CN=example.com
+O=Example Organization
+L=Paris
+ST=Île-de-France
+C=FR
+```
+
+#### Issuer (Émetteur)
+
+Identifie l'autorité de certification :
+
+```
+CN=Let's Encrypt Authority X3
+O=Let's Encrypt
+C=US
+```
+
+#### Extensions
+
+Extensions critiques et non-critiques :
+
+- **Subject Alternative Name (SAN)** : Noms de domaine alternatifs
+- **Key Usage** : Utilisations autorisées de la clé
+- **Extended Key Usage** : Utilisations étendues
+- **Basic Constraints** : Indique si c'est une CA
+- **Authority Key Identifier** : Identifie la clé de la CA
+- **Subject Key Identifier** : Identifie la clé du sujet
+
+## Chaîne de confiance
+
+### Hiérarchie des certificats
+
+```
+Root CA (Auto-signé)
+  └── Intermediate CA 1
+      └── Intermediate CA 2
+          └── Server Certificate
+```
+
+### Validation de la chaîne
+
+```javascript
+const tls = require('tls');
+const crypto = require('crypto');
+
+function validateCertificateChain(cert, chain) {
+    const certObj = crypto.X509Certificate(cert);
+    
+    for (const caCert of chain) {
+        const caObj = crypto.X509Certificate(caCert);
+        
+        if (!verifySignature(certObj, caObj)) {
+            throw new Error('Invalid signature in chain');
+        }
+        
+        if (!isValid(caObj)) {
+            throw new Error('Expired or not yet valid certificate in chain');
+        }
+        
+        certObj = caObj;
+    }
+    
+    const rootCA = findRootCA(certObj.issuer);
+    if (!isTrustedRoot(rootCA)) {
+        throw new Error('Untrusted root CA');
+    }
+    
+    return true;
+}
+
+function verifySignature(cert, issuerCert) {
+    const publicKey = issuerCert.publicKey;
+    const signature = cert.signature;
+    const data = cert.tbsCertificate;
+    
+    return crypto.verify(
+        'RSA-SHA256',
+        data,
+        publicKey,
+        signature
+    );
+}
+```
+
+### Autorités de certification racines
+
+Les CA racines sont préinstallées dans :
+
+- Navigateurs web (Chrome, Firefox, Safari)
+- Systèmes d'exploitation (Windows, macOS, Linux)
+- Applications (Java, Node.js)
+
+```javascript
+const https = require('https');
+
+const options = {
+    hostname: 'example.com',
+    port: 443,
+    path: '/',
+    method: 'GET',
+    ca: [
+        fs.readFileSync('/etc/ssl/certs/ca-certificates.crt')
+    ]
+};
+
+https.request(options, (res) => {
+    console.log('Certificate valid');
+}).on('error', (err) => {
+    console.error('Certificate validation failed:', err);
+});
+```
+
+## Types de certificats
+
+### DV (Domain Validated)
+
+Validation minimale : vérification du contrôle du domaine.
+
+**Processus :**
+1. Demande de certificat
+2. CA vérifie le contrôle du domaine (email, DNS, HTTP)
+3. Émission du certificat
+
+**Caractéristiques :**
+- Validation rapide (quelques minutes)
+- Coût faible ou gratuit
+- Pas d'information sur l'organisation
+
+### OV (Organization Validated)
+
+Validation de l'organisation en plus du domaine.
+
+**Processus :**
+1. Vérification du domaine
+2. Vérification de l'organisation (documents légaux)
+3. Émission du certificat
+
+**Caractéristiques :**
+- Validation plus longue (quelques jours)
+- Coût modéré
+- Informations d'organisation dans le certificat
+
+### EV (Extended Validation)
+
+Validation étendue avec vérification approfondie.
+
+**Processus :**
+1. Vérification du domaine
+2. Vérification approfondie de l'organisation
+3. Vérification de l'identité légale
+4. Émission du certificat
+
+**Caractéristiques :**
+- Validation longue (plusieurs jours)
+- Coût élevé
+- Barre verte dans les navigateurs (obsolète maintenant)
+- Informations complètes dans le certificat
+
+### Certificats wildcard
+
+Certificats valides pour un domaine et tous ses sous-domaines.
+
+```
+*.example.com
+```
+
+**Avantages :**
+- Un seul certificat pour plusieurs sous-domaines
+- Gestion simplifiée
+
+**Inconvénients :**
+- Risque de compromission étendu
+- Pas de protection pour le domaine racine
+
+### Certificats multi-domaines (SAN)
+
+Certificats valides pour plusieurs domaines.
+
+```
+CN=example.com
+SAN=example.com, www.example.com, api.example.com, admin.example.com
+```
+
+## Validation des certificats
+
+### Vérifications requises
+
+```javascript
+class CertificateValidator {
+    validate(cert, hostname) {
+        const errors = [];
+        
+        if (!this.checkValidity(cert)) {
+            errors.push('Certificate expired or not yet valid');
+        }
+        
+        if (!this.checkHostname(cert, hostname)) {
+            errors.push('Hostname mismatch');
+        }
+        
+        if (!this.checkChain(cert)) {
+            errors.push('Invalid certificate chain');
+        }
+        
+        if (!this.checkRevocation(cert)) {
+            errors.push('Certificate revoked');
+        }
+        
+        if (!this.checkKeyUsage(cert)) {
+            errors.push('Invalid key usage');
+        }
+        
+        return {
+            valid: errors.length === 0,
+            errors
+        };
+    }
+    
+    checkValidity(cert) {
+        const now = new Date();
+        const notBefore = new Date(cert.validity.notBefore);
+        const notAfter = new Date(cert.validity.notAfter);
+        
+        return now >= notBefore && now <= notAfter;
+    }
+    
+    checkHostname(cert, hostname) {
+        const cn = cert.subject.getField('CN').value;
+        const sans = cert.getExtension('subjectAltName');
+        
+        if (cn === hostname) {
+            return true;
+        }
+        
+        if (sans) {
+            for (const san of sans.altNames) {
+                if (san.type === 2 && this.matchesHostname(san.value, hostname)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    matchesHostname(pattern, hostname) {
+        if (pattern === hostname) {
+            return true;
+        }
+        
+        if (pattern.startsWith('*.')) {
+            const domain = pattern.substring(2);
+            const hostParts = hostname.split('.');
+            const patternParts = domain.split('.');
+            
+            if (hostParts.length === patternParts.length + 1) {
+                return hostParts.slice(1).join('.') === domain;
+            }
+        }
+        
+        return false;
+    }
+    
+    async checkRevocation(cert) {
+        const ocspUrl = cert.getExtension('authorityInfoAccess');
+        if (ocspUrl) {
+            return await this.checkOCSP(cert, ocspUrl);
+        }
+        
+        const crlUrl = cert.getExtension('crlDistributionPoints');
+        if (crlUrl) {
+            return await this.checkCRL(cert, crlUrl);
+        }
+        
+        return true;
+    }
+}
+```
+
+### OCSP (Online Certificate Status Protocol)
+
+Vérification en temps réel du statut de révocation.
+
+```javascript
+const ocsp = require('ocsp');
+
+async function checkOCSPStatus(cert, issuerCert) {
+    const ocspReq = ocsp.request.generate(cert, issuerCert);
+    
+    const ocspUrl = cert.getExtension('authorityInfoAccess')
+        .find(ext => ext.method === 'OCSP')?.location;
+    
+    if (!ocspUrl) {
+        throw new Error('OCSP URL not found');
+    }
+    
+    const response = await ocsp.utils.request(ocspUrl, ocspReq);
+    const ocspRes = ocsp.response.verify(response, issuerCert);
+    
+    return {
+        status: ocspRes.status,
+        thisUpdate: ocspRes.thisUpdate,
+        nextUpdate: ocspRes.nextUpdate
+    };
+}
+```
+
+### CRL (Certificate Revocation List)
+
+Liste des certificats révoqués.
+
+```javascript
+const crl = require('crl');
+
+async function checkCRL(cert) {
+    const crlUrl = cert.getExtension('crlDistributionPoints')?.[0]?.fullName?.[0];
+    
+    if (!crlUrl) {
+        return true;
+    }
+    
+    const crlData = await fetch(crlUrl).then(r => r.buffer());
+    const crlObj = crl.parse(crlData);
+    
+    return !crlObj.isRevoked(cert.serialNumber);
+}
+```
+
+## Vulnérabilités et attaques
+
+### Certificate Pinning
+
+Épingler les certificats pour prévenir les attaques MITM.
+
+```javascript
+const https = require('https');
+const tls = require('tls');
+
+const pinnedCerts = [
+    'sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB='
+];
+
+function checkPinning(cert) {
+    const fingerprint = crypto
+        .createHash('sha256')
+        .update(cert.raw)
+        .digest('base64');
+    
+    return pinnedCerts.includes(`sha256/${fingerprint}`);
+}
+
+const options = {
+    hostname: 'api.example.com',
+    port: 443,
+    path: '/',
+    method: 'GET',
+    checkServerIdentity: (servername, cert) => {
+        if (!checkPinning(cert)) {
+            throw new Error('Certificate pinning failed');
+        }
+        return undefined;
+    }
+};
+```
+
+### MITM (Man-in-the-Middle)
+
+Attaquant interceptant les communications.
+
+**Protection :**
+- Vérifier la chaîne de certificats
+- Utiliser HSTS
+- Implémenter certificate pinning
+- Valider les certificats côté client
+
+### Certificats auto-signés
+
+Certificats non émis par une CA de confiance.
+
+```javascript
+function validateCertificate(cert) {
+    if (cert.issuer === cert.subject) {
+        throw new Error('Self-signed certificate');
+    }
+    
+    if (!isTrustedCA(cert.issuer)) {
+        throw new Error('Untrusted CA');
+    }
+}
+```
+
+### Certificats expirés
+
+```javascript
+function checkExpiration(cert) {
+    const now = new Date();
+    const notAfter = new Date(cert.validity.notAfter);
+    
+    if (now > notAfter) {
+        throw new Error('Certificate expired');
+    }
+    
+    const daysUntilExpiration = Math.floor((notAfter - now) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilExpiration < 30) {
+        console.warn(`Certificate expires in ${daysUntilExpiration} days`);
+    }
+}
+```
+
+### Weak keys
+
+Clés cryptographiques faibles.
+
+```javascript
+function validateKeyStrength(cert) {
+    const publicKey = cert.publicKey;
+    
+    if (publicKey.algorithm === 'RSA') {
+        if (publicKey.keySize < 2048) {
+            throw new Error('RSA key too weak (minimum 2048 bits)');
+        }
+    }
+    
+    if (publicKey.algorithm === 'ECDSA') {
+        if (publicKey.curve !== 'P-256' && publicKey.curve !== 'P-384' && publicKey.curve !== 'P-521') {
+            throw new Error('ECDSA curve not secure');
+        }
+    }
+}
+```
+
+## Gestion des certificats
+
+### Renouvellement automatique
+
+```javascript
+const acme = require('acme-client');
+
+class CertificateManager {
+    constructor() {
+        this.client = new acme.Client({
+            directoryUrl: acme.directory.letsencrypt.production
+        });
+    }
+    
+    async generateCertificate(domains) {
+        const accountKey = await acme.crypto.createPrivateKey();
+        const accountKeyPair = await acme.crypto.createPrivateKey(accountKey);
+        
+        await this.client.createAccount({
+            termsOfServiceAgreed: true,
+            accountKey: accountKeyPair
+        });
+        
+        const [key, csr] = await acme.crypto.createCsr({
+            commonName: domains[0],
+            altNames: domains.slice(1)
+        });
+        
+        const cert = await this.client.auto({
+            csr,
+            email: 'admin@example.com',
+            termsOfServiceAgreed: true,
+            challengeCreateFn: async (authz, challenge, keyAuthorization) => {
+                if (challenge.type === 'http-01') {
+                    await this.createHTTPChallenge(challenge.token, keyAuthorization);
+                }
+            },
+            challengeRemoveFn: async (authz, challenge, keyAuthorization) => {
+                await this.removeHTTPChallenge(challenge.token);
+            }
+        });
+        
+        return { cert, key };
+    }
+    
+    async renewCertificateIfNeeded(domains) {
+        const cert = await this.getCurrentCertificate(domains[0]);
+        
+        if (!cert) {
+            return await this.generateCertificate(domains);
+        }
+        
+        const daysUntilExpiration = this.getDaysUntilExpiration(cert);
+        
+        if (daysUntilExpiration < 30) {
+            return await this.generateCertificate(domains);
+        }
+        
+        return cert;
+    }
+}
+```
+
+### Monitoring
+
+```javascript
+class CertificateMonitor {
+    async checkCertificates() {
+        const domains = await this.getMonitoredDomains();
+        const alerts = [];
+        
+        for (const domain of domains) {
+            try {
+                const cert = await this.getCertificate(domain);
+                const daysUntilExpiration = this.getDaysUntilExpiration(cert);
+                
+                if (daysUntilExpiration < 7) {
+                    alerts.push({
+                        domain,
+                        severity: 'critical',
+                        message: `Certificate expires in ${daysUntilExpiration} days`
+                    });
+                } else if (daysUntilExpiration < 30) {
+                    alerts.push({
+                        domain,
+                        severity: 'warning',
+                        message: `Certificate expires in ${daysUntilExpiration} days`
+                    });
+                }
+                
+                if (!this.validateCertificate(cert)) {
+                    alerts.push({
+                        domain,
+                        severity: 'error',
+                        message: 'Certificate validation failed'
+                    });
+                }
+            } catch (error) {
+                alerts.push({
+                    domain,
+                    severity: 'error',
+                    message: `Failed to check certificate: ${error.message}`
+                });
+            }
+        }
+        
+        return alerts;
+    }
+}
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser des certificats valides émis par une CA de confiance
+- [ ] Renouveler les certificats avant expiration (30 jours minimum)
+- [ ] Utiliser des clés d'au moins 2048 bits (RSA) ou courbes sécurisées (ECDSA)
+- [ ] Implémenter HSTS pour forcer HTTPS
+- [ ] Valider les certificats côté client pour les applications sensibles
+- [ ] Monitorer l'expiration des certificats
+- [ ] Utiliser des certificats wildcard avec précaution
+- [ ] Implémenter la révocation en cas de compromission
+- [ ] Stocker les clés privées de manière sécurisée
+- [ ] Ne jamais exposer les clés privées
+- [ ] Utiliser des certificats avec SAN pour plusieurs domaines
+- [ ] Vérifier régulièrement la chaîne de confiance
+- [ ] Implémenter OCSP stapling pour améliorer les performances
+- [ ] Documenter la gestion des certificats
+- [ ] Former l'équipe à la gestion des certificats
+
+## Conclusion
+
+Les certificats SSL/TLS sont essentiels pour la sécurité web. Une gestion correcte, une validation appropriée et un monitoring régulier sont cruciaux pour maintenir la sécurité des communications.
+
+## Références techniques
+
+- [RFC 5280 - X.509 Certificate Profile](https://tools.ietf.org/html/rfc5280)
+- [RFC 6960 - OCSP](https://tools.ietf.org/html/rfc6960)
+- [RFC 7469 - Public Key Pinning](https://tools.ietf.org/html/rfc7469)
+- [Let's Encrypt](https://letsencrypt.org/)
+- [CA/Browser Forum](https://cabforum.org/)

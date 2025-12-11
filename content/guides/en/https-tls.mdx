@@ -1,0 +1,63 @@
+---
+title: "HTTPS and TLS"
+category: "web-security"
+description: "Guide on HTTPS and TLS: handshake, versions, cipher suites, HSTS, certificate pinning"
+coverImage: "/guides/https.jpg"
+date: "2024-03-17"
+---
+
+# HTTPS and TLS
+
+HTTPS (HTTP Secure) combines HTTP with TLS to encrypt communications. TLS is the standard encryption protocol for securing web communications.
+
+## TLS Handshake
+
+### Main Steps
+
+1. **Client Hello**: TLS versions, cipher suites, nonce
+2. **Server Hello**: Chosen version, cipher suite, certificate, nonce
+3. **Certificate verification**: Validation by client
+4. **Key exchange**: Session key generation
+5. **Encryption enabled**: Encrypted communication
+
+## TLS Versions
+
+- **TLS 1.0/1.1**: Obsolete, vulnerable
+- **TLS 1.2**: Current standard, secure
+- **TLS 1.3**: Modern, faster and more secure
+
+## Cipher Suites
+
+Combination of algorithms for:
+- Key exchange (RSA, ECDHE)
+- Authentication (RSA, ECDSA)
+- Encryption (AES, ChaCha20)
+- Integrity (SHA-256, Poly1305)
+
+## HSTS (HTTP Strict Transport Security)
+
+Forces browsers to use HTTPS for a domain.
+
+```
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+## Certificate Pinning
+
+Pin certificates to prevent MITM attacks. Risk if certificate expires.
+
+## Best Practices
+
+- Use TLS 1.2 minimum, TLS 1.3 recommended
+- Disable obsolete versions
+- Choose secure cipher suites
+- Implement HSTS
+- Renew certificates before expiration
+
+## Conclusion
+
+HTTPS/TLS is essential for web security. Correct configuration protects communications against interception.
+
+
+
+

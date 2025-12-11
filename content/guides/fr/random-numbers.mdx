@@ -1,0 +1,494 @@
+---
+title: "Nombres aléatoires cryptographiques - Guide complet"
+category: "best-practices"
+description: "Guide expert sur la génération de nombres aléatoires cryptographiques : sources d'entropie, CSPRNG vs PRNG, vulnérabilités, implémentations sécurisées, tests d'entropie et bonnes pratiques."
+coverImage: "/guides/random.jpg"
+date: "2024-03-10"
+difficulty: "avancé"
+readingTime: "35 min"
+prerequisites: ["Cryptographie", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Nombres aléatoires cryptographiques - Guide complet
+
+La génération de nombres aléatoires est fondamentale en cryptographie. La qualité de l'aléa détermine directement la sécurité des systèmes cryptographiques. Une source d'aléa faible ou prévisible peut compromettre complètement la sécurité.
+
+## Introduction
+
+Les nombres aléatoires cryptographiques sont utilisés pour :
+
+- Génération de clés cryptographiques
+- Génération de nonces et IV (Initialization Vectors)
+- Génération de tokens et sessions IDs
+- Salage de mots de passe
+- Protocoles cryptographiques (DSA, ECDSA, etc.)
+
+### Pourquoi c'est critique
+
+Si un attaquant peut prédire ou deviner les nombres aléatoires utilisés :
+
+- Les clés peuvent être devinées
+- Les nonces peuvent être réutilisés
+- Les tokens peuvent être forgés
+- La sécurité cryptographique est compromise
+
+## Sources d'entropie
+
+### Entropie système
+
+L'entropie provient de sources physiques imprévisibles :
+
+#### Sources matérielles
+
+- **Bruit thermique** : Fluctuations aléatoires dans les circuits électroniques
+- **Oscillateurs** : Variations de fréquence dans les oscillateurs
+- **Mouvements de souris** : Timing et positions
+- **Frappes au clavier** : Timing entre les frappes
+- **Interruptions système** : Timing des interruptions matérielles
+- **Variations de tension** : Fluctuations dans l'alimentation
+
+#### Sources logicielles
+
+```javascript
+// Collecte d'entropie système
+class EntropyCollector {
+    collectSystemEntropy() {
+        const sources = [];
+        
+        sources.push(process.hrtime.bigint().toString());
+        sources.push(process.memoryUsage().heapUsed.toString());
+        sources.push(Math.random().toString());
+        sources.push(Date.now().toString());
+        
+        if (process.platform === 'linux') {
+            try {
+                const fs = require('fs');
+                sources.push(fs.readFileSync('/dev/urandom', { encoding: 'hex', length: 32 }));
+            } catch (e) {}
+        }
+        
+        return Buffer.from(sources.join(''), 'hex');
+    }
+}
+```
+
+### Générateurs matériels (HRNG)
+
+Hardware Random Number Generators utilisent des phénomènes physiques :
+
+- **Générateurs quantiques** : Utilisent l'aléa quantique
+- **Générateurs basés sur le bruit** : Bruit thermique, bruit de tir
+- **Générateurs basés sur la physique** : Désintégration radioactive
+
+**Avantages :**
+- Vraie aléa (non déterministe)
+- Haute entropie
+- Résistant aux attaques
+
+**Inconvénients :**
+- Coût élevé
+- Peut être lent
+- Nécessite un accès matériel
+
+## PRNG vs CSPRNG
+
+### PRNG (Pseudo-Random Number Generator)
+
+Générateur déterministe basé sur un algorithme mathématique.
+
+**Caractéristiques :**
+- Déterministe : Même graine = même séquence
+- Rapide
+- Prévisible si la graine est connue
+
+**Exemples :**
+- Linear Congruential Generator (LCG)
+- Mersenne Twister
+- `Math.random()` en JavaScript
+
+```javascript
+// PRNG simple (NE PAS UTILISER pour la cryptographie)
+class SimplePRNG {
+    constructor(seed) {
+        this.state = seed;
+    }
+    
+    next() {
+        this.state = (this.state * 1103515245 + 12345) & 0x7fffffff;
+        return this.state;
+    }
+}
+
+// Vulnérable : prévisible
+const prng = new SimplePRNG(12345);
+console.log(prng.next()); // Toujours le même résultat
+```
+
+**⚠️ Ne jamais utiliser pour la cryptographie**
+
+### CSPRNG (Cryptographically Secure PRNG)
+
+Générateur résistant aux attaques cryptographiques.
+
+**Caractéristiques :**
+- Basé sur une source d'entropie réelle
+- Résistant aux attaques cryptographiques
+- Imprévisible même avec connaissance partielle de l'état
+
+**Exemples :**
+- `/dev/urandom` (Linux)
+- `CryptGenRandom` (Windows)
+- `crypto.randomBytes()` (Node.js)
+- `SecureRandom` (Java)
+
+## Implémentations par plateforme
+
+### Node.js
+
+```javascript
+const crypto = require('crypto');
+
+// Génération sécurisée
+const randomBytes = crypto.randomBytes(32);
+console.log(randomBytes.toString('hex'));
+
+// Génération avec callback
+crypto.randomBytes(32, (err, buf) => {
+    if (err) throw err;
+    console.log(buf.toString('hex'));
+});
+
+// Génération asynchrone
+async function generateRandomBytes(length) {
+    return await crypto.randomBytes(length);
+}
+
+// Génération d'entier aléatoire
+function randomInt(min, max) {
+    const range = max - min;
+    const bytesNeeded = Math.ceil(Math.log2(range) / 8);
+    const maxValid = Math.floor(256 ** bytesNeeded / range) * range - 1;
+    
+    let randomValue;
+    do {
+        const randomBytes = crypto.randomBytes(bytesNeeded);
+        randomValue = 0;
+        for (let i = 0; i < bytesNeeded; i++) {
+            randomValue = (randomValue << 8) + randomBytes[i];
+        }
+    } while (randomValue > maxValid);
+    
+    return min + (randomValue % range);
+}
+```
+
+### Python
+
+```python
+import secrets
+import os
+
+# Génération sécurisée
+random_bytes = secrets.token_bytes(32)
+random_hex = secrets.token_hex(32)
+random_urlsafe = secrets.token_urlsafe(32)
+
+# Génération d'entier
+random_int = secrets.randbelow(100)
+
+# Choix aléatoire
+random_choice = secrets.choice(['a', 'b', 'c'])
+
+# Utilisation de os.urandom
+random_bytes = os.urandom(32)
+```
+
+### Java
+
+```java
+import java.security.SecureRandom;
+
+SecureRandom random = new SecureRandom();
+
+// Génération de bytes
+byte[] randomBytes = new byte[32];
+random.nextBytes(randomBytes);
+
+// Génération d'entier
+int randomInt = random.nextInt(100);
+
+// Génération de long
+long randomLong = random.nextLong();
+```
+
+### C/C++
+
+```c
+#include <openssl/rand.h>
+
+unsigned char random_bytes[32];
+if (RAND_bytes(random_bytes, 32) != 1) {
+    // Erreur
+}
+```
+
+## Vulnérabilités courantes
+
+### Graines faibles ou prévisibles
+
+```javascript
+// Vulnérable : Graine prévisible
+const seed = Date.now();
+const random = new PRNG(seed);
+
+// Vulnérable : Graine faible
+const seed = Math.random();
+const random = new PRNG(seed);
+
+// Sécurisé : Graine cryptographique
+const seed = crypto.randomBytes(32);
+const random = new CSPRNG(seed);
+```
+
+### Réutilisation de nonces
+
+```javascript
+// Vulnérable : Nonce réutilisé
+let nonce = crypto.randomBytes(16);
+// Utilisation multiple du même nonce
+
+// Sécurisé : Nouveau nonce à chaque utilisation
+function generateNonce() {
+    return crypto.randomBytes(16);
+}
+
+const nonce1 = generateNonce();
+const nonce2 = generateNonce();
+```
+
+### Fuites d'entropie
+
+```javascript
+// Vulnérable : Entropie insuffisante
+function generateKey() {
+    const entropy = Date.now().toString();
+    return crypto.createHash('sha256').update(entropy).digest();
+}
+
+// Sécurisé : Source d'entropie cryptographique
+function generateKey() {
+    return crypto.randomBytes(32);
+}
+```
+
+### Attaques par timing
+
+```javascript
+// Vulnérable : Timing peut révéler des informations
+function compareBuffers(a, b) {
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false; // Retourne immédiatement
+        }
+    }
+    return true;
+}
+
+// Sécurisé : Comparaison à temps constant
+function constantTimeCompare(a, b) {
+    if (a.length !== b.length) {
+        return false;
+    }
+    
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+        result |= a[i] ^ b[i];
+    }
+    return result === 0;
+}
+```
+
+## Tests d'entropie
+
+### Tests statistiques
+
+```javascript
+const crypto = require('crypto');
+
+class EntropyTester {
+    testRandomness(data) {
+        const tests = {
+            frequency: this.frequencyTest(data),
+            runs: this.runsTest(data),
+            serial: this.serialTest(data),
+            poker: this.pokerTest(data)
+        };
+        
+        return tests;
+    }
+    
+    frequencyTest(data) {
+        let ones = 0;
+        for (const byte of data) {
+            ones += this.countOnes(byte);
+        }
+        
+        const totalBits = data.length * 8;
+        const expected = totalBits / 2;
+        const chiSquare = Math.pow(ones - expected, 2) / expected;
+        
+        return {
+            passed: chiSquare < 3.84,
+            chiSquare,
+            ones,
+            zeros: totalBits - ones
+        };
+    }
+    
+    runsTest(data) {
+        let runs = 1;
+        let previousBit = (data[0] & 0x80) !== 0;
+        
+        for (const byte of data) {
+            for (let i = 7; i >= 0; i--) {
+                const currentBit = (byte & (1 << i)) !== 0;
+                if (currentBit !== previousBit) {
+                    runs++;
+                    previousBit = currentBit;
+                }
+            }
+        }
+        
+        const expectedRuns = (data.length * 8 + 1) / 2;
+        const variance = (data.length * 8 - 1) / 4;
+        const z = Math.abs(runs - expectedRuns) / Math.sqrt(variance);
+        
+        return {
+            passed: z < 1.96,
+            runs,
+            zScore: z
+        };
+    }
+    
+    countOnes(byte) {
+        let count = 0;
+        while (byte) {
+            count += byte & 1;
+            byte >>= 1;
+        }
+        return count;
+    }
+}
+
+// Utilisation
+const tester = new EntropyTester();
+const randomData = crypto.randomBytes(1000);
+const results = tester.testRandomness(randomData);
+console.log(results);
+```
+
+### Tests d'entropie (Shannon)
+
+```javascript
+function calculateEntropy(data) {
+    const frequencies = new Map();
+    
+    for (const byte of data) {
+        frequencies.set(byte, (frequencies.get(byte) || 0) + 1);
+    }
+    
+    let entropy = 0;
+    const length = data.length;
+    
+    for (const count of frequencies.values()) {
+        const probability = count / length;
+        entropy -= probability * Math.log2(probability);
+    }
+    
+    return entropy;
+}
+
+// Entropie maximale pour des bytes : 8 bits
+const randomData = crypto.randomBytes(1000);
+const entropy = calculateEntropy(randomData);
+console.log(`Entropie: ${entropy.toFixed(2)} bits (max: 8 bits)`);
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser exclusivement des CSPRNG pour la cryptographie
+- [ ] Ne jamais utiliser `Math.random()` pour la sécurité
+- [ ] Générer des graines avec des sources d'entropie réelles
+- [ ] Ne jamais réutiliser des nonces
+- [ ] Utiliser des longueurs appropriées (minimum 128 bits pour les clés)
+- [ ] Vérifier la qualité des sources d'entropie
+- [ ] Tester régulièrement les générateurs
+- [ ] Documenter les sources d'entropie utilisées
+- [ ] Ne jamais exposer les graines ou l'état interne
+- [ ] Utiliser des bibliothèques cryptographiques réputées
+- [ ] Éviter les implémentations personnalisées
+- [ ] Monitorer les sources d'entropie système
+- [ ] Implémenter la détection de défaillance d'entropie
+- [ ] Utiliser des comparaisons à temps constant
+- [ ] Valider la qualité de l'aléa généré
+
+### Exemples d'utilisation sécurisée
+
+#### Génération de clé
+
+```javascript
+function generateKey(length = 32) {
+    return crypto.randomBytes(length);
+}
+
+const encryptionKey = generateKey(32);
+const signingKey = generateKey(64);
+```
+
+#### Génération de nonce
+
+```javascript
+function generateNonce() {
+    return crypto.randomBytes(16);
+}
+
+// Nouveau nonce à chaque utilisation
+const nonce1 = generateNonce();
+const nonce2 = generateNonce();
+```
+
+#### Génération de token
+
+```javascript
+function generateToken(length = 32) {
+    return crypto.randomBytes(length).toString('base64url');
+}
+
+const sessionToken = generateToken(32);
+const csrfToken = generateToken(16);
+```
+
+#### Génération de sel
+
+```javascript
+function generateSalt(length = 16) {
+    return crypto.randomBytes(length);
+}
+
+const passwordSalt = generateSalt(16);
+```
+
+## Conclusion
+
+La génération sécurisée de nombres aléatoires est fondamentale pour la sécurité cryptographique. Toujours utiliser des CSPRNG pour les applications cryptographiques, éviter les PRNG standards, et s'assurer que les sources d'entropie sont suffisantes.
+
+## Références techniques
+
+- [NIST SP 800-90A - Random Number Generation](https://csrc.nist.gov/publications/detail/sp/800-90a/rev-1/final)
+- [RFC 4086 - Randomness Requirements for Security](https://tools.ietf.org/html/rfc4086)
+- [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
+- [Diehard Tests](https://webhome.phy.duke.edu/~rgb/General/dieharder.php)
+- [NIST Statistical Test Suite](https://csrc.nist.gov/projects/random-bit-generation)

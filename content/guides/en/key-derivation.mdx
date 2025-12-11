@@ -1,0 +1,149 @@
+---
+title: "Key Derivation"
+category: "cryptography"
+description: "Complete guide on key derivation: PBKDF2, Argon2, scrypt, security parameters and attacks"
+coverImage: "/guides/key-derivation.jpg"
+date: "2024-03-04"
+---
+
+# Key Derivation
+
+Key derivation is the process of generating a cryptographic key from another key, a password, or another entropy source. It is essential for password security and key generation.
+
+## Why Derive Keys?
+
+### Password Problem
+
+Human passwords have low entropy and are vulnerable to dictionary and brute force attacks. Key derivation transforms these weak passwords into strong cryptographic keys.
+
+### Objectives
+
+- Slow down brute force attacks
+- Resist GPU/ASIC attacks
+- Generate fixed-size keys from variable inputs
+
+## PBKDF2 (Password-Based Key Derivation Function 2)
+
+NIST standard (RFC 2898) widely used and supported.
+
+### Characteristics
+
+- Based on a hash function (SHA-256, SHA-512)
+- Uses iterations to slow down attacks
+- Parameters: number of iterations, key length, hash function
+
+### Usage
+
+```javascript
+const crypto = require('crypto');
+
+const password = 'userPassword';
+const salt = crypto.randomBytes(16);
+const iterations = 100000;
+const keyLength = 32;
+
+const key = crypto.pbkdf2Sync(
+    password,
+    salt,
+    iterations,
+    keyLength,
+    'sha256'
+);
+```
+
+### Recommended Parameters
+
+- **Iterations**: Minimum 100,000 (increase over time)
+- **Salt**: 16 bytes minimum, random and unique
+- **Hash function**: SHA-256 or SHA-512
+
+## Argon2
+
+Winner of the Password Hashing Competition (2015). Considered the most secure algorithm currently.
+
+### Variants
+
+- **Argon2i**: Resistant to side-channel attacks
+- **Argon2d**: Resistant to GPU attacks
+- **Argon2id**: Compromise between the two (recommended)
+
+### Advantages
+
+- Resistant to GPU and ASIC attacks
+- Adaptive parameters (memory, time, parallelism)
+- More secure than PBKDF2
+
+### Parameters
+
+- **Memory (m)**: Amount of memory used (in KB)
+- **Time (t)**: Number of iterations
+- **Parallelism (p)**: Number of threads
+
+### Usage
+
+```javascript
+const argon2 = require('argon2');
+
+const hash = await argon2.hash(password, {
+    type: argon2.argon2id,
+    memoryCost: 65536, // 64 MB
+    timeCost: 3,
+    parallelism: 4
+});
+```
+
+## Scrypt
+
+Designed to be memory and CPU intensive, resistant to specialized hardware attacks.
+
+### Characteristics
+
+- Uses large amount of memory
+- Parameters: N (cost factor), r (block size), p (parallelism)
+
+### Usage
+
+```javascript
+const scrypt = require('scrypt');
+
+const key = scrypt.hashSync(password, {
+    N: 16384,
+    r: 8,
+    p: 1
+}, 64);
+```
+
+## Algorithm Comparison
+
+| Algorithm | GPU Resistance | ASIC Resistance | Memory | Recommendation |
+|-----------|----------------|-----------------|--------|----------------|
+| PBKDF2 | Low | Low | Low | Acceptable |
+| Scrypt | Medium | Medium | High | Good |
+| Argon2 | High | High | High | **Best** |
+
+## Dictionary Attacks
+
+Attempt to guess a password by trying common words and their variations.
+
+### Protection
+
+- Use slow derivation functions
+- Increase number of iterations
+- Use unique salts
+
+## Best Practices
+
+- Use Argon2id for new applications
+- Use unique and random salts (16+ bytes)
+- Adjust parameters according to server capabilities
+- Increase iterations over time
+- Never store passwords in plaintext
+- Regularly check security recommendations
+
+## Conclusion
+
+Key derivation is essential to secure passwords. Argon2 is currently the best option, offering superior resistance to modern attacks while remaining performant.
+
+
+
+

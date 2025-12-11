@@ -1,0 +1,555 @@
+---
+title: "Chiffrement de données - Guide complet"
+category: "cryptography"
+description: "Guide expert sur le chiffrement : AES-256-GCM, modes de chiffrement détaillés, gestion des clés (HSM, Key Vaults), IV/nonces, chiffrement au repos vs en transit, vulnérabilités, implémentations complètes et bonnes pratiques."
+coverImage: "/guides/encryption.jpg"
+date: "2024-03-03"
+difficulty: "avancé"
+readingTime: "50 min"
+prerequisites: ["Cryptographie", "Algorithmes", "Sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Chiffrement de données - Guide complet
+
+Le chiffrement est le processus de transformation de données en un format illisible sans la clé de déchiffrement appropriée. Il garantit la confidentialité des données au repos et en transit, constituant un pilier fondamental de la sécurité informatique moderne.
+
+## Introduction
+
+Le chiffrement moderne utilise des algorithmes mathématiques complexes pour transformer des données en texte chiffré. Seule la possession de la clé de déchiffrement permet de retrouver les données originales.
+
+**Objectifs du chiffrement :**
+- **Confidentialité** : Protéger les données contre l'accès non autorisé
+- **Intégrité** : Détecter les modifications (avec modes authentifiés)
+- **Authentification** : Vérifier l'origine des données
+
+## AES (Advanced Encryption Standard)
+
+AES est l'algorithme de chiffrement symétrique standard adopté par le NIST en 2001. Il remplace DES et 3DES.
+
+### Tailles de clés
+
+#### AES-128
+
+- Clé de 128 bits
+- 10 rounds
+- Sécurité suffisante pour la plupart des cas
+- Recommandé pour la plupart des applications
+
+#### AES-192
+
+- Clé de 192 bits
+- 12 rounds
+- Sécurité renforcée
+- Utilisé pour des applications sensibles
+
+#### AES-256
+
+- Clé de 256 bits
+- 14 rounds
+- Niveau de sécurité maximal
+- Recommandé pour les données très sensibles
+- Résistant aux attaques quantiques
+
+### Sécurité
+
+AES est considéré comme sécurisé contre toutes les attaques connues, y compris les attaques par force brute. Même avec des ordinateurs quantiques, AES-256 reste sécurisé.
+
+**Résistance :**
+- Force brute : 2^128 ou 2^256 possibilités
+- Cryptanalyse : Aucune attaque efficace connue
+- Attaques quantiques : Résistant (algorithme symétrique)
+
+## Modes de chiffrement
+
+### ECB (Electronic Codebook)
+
+**⚠️ À éviter absolument**
+
+Chaque bloc est chiffré indépendamment, exposant des patterns dans les données.
+
+```javascript
+// Vulnérable : Patterns visibles
+const crypto = require('crypto');
+const cipher = crypto.createCipher('aes-256-ecb', key);
+```
+
+**Problème :** Des blocs identiques produisent des ciphertexts identiques.
+
+### CBC (Cipher Block Chaining)
+
+Chaque bloc est XORé avec le bloc chiffré précédent avant le chiffrement.
+
+**Caractéristiques :**
+- Nécessite un IV unique et aléatoire
+- Séquentiel (pas de parallélisation)
+- Vulnérable aux attaques de padding oracle
+
+```javascript
+const iv = crypto.randomBytes(16);
+const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+
+const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final()
+]);
+```
+
+**Protection :** Utiliser un MAC séparé pour l'intégrité.
+
+### CTR (Counter)
+
+Transforme le chiffrement par blocs en chiffrement de flux.
+
+**Avantages :**
+- Permet le chiffrement parallèle
+- Accès aléatoire aux données
+- Pas de padding nécessaire
+
+```javascript
+const nonce = crypto.randomBytes(12);
+const cipher = crypto.createCipheriv('aes-256-ctr', key, nonce);
+
+const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final()
+]);
+```
+
+**Protection :** Utiliser un MAC séparé pour l'intégrité.
+
+### GCM (Galois/Counter Mode)
+
+Mode authentifié qui fournit à la fois confidentialité et intégrité. **Recommandé.**
+
+**Avantages :**
+- Chiffrement et authentification en une seule opération
+- Performant
+- Permet le chiffrement parallèle
+- Standard moderne
+
+```javascript
+const iv = crypto.randomBytes(12);
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+cipher.setAAD(additionalData);
+
+const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final()
+]);
+
+const authTag = cipher.getAuthTag();
+```
+
+### CCM (Counter with CBC-MAC)
+
+Mode authentifié alternatif à GCM.
+
+### XTS (XEX-based Tweaked Codebook)
+
+Utilisé pour le chiffrement de disques (Full Disk Encryption).
+
+## Gestion des clés
+
+### Génération de clés
+
+Utiliser des générateurs cryptographiquement sécurisés (CSPRNG) :
+
+```javascript
+const crypto = require('crypto');
+
+function generateKey(keySize = 256) {
+    return crypto.randomBytes(keySize / 8);
+}
+
+const key128 = generateKey(128);
+const key256 = generateKey(256);
+```
+
+### Stockage des clés
+
+#### HSM (Hardware Security Module)
+
+Solution la plus sécurisée pour le stockage des clés.
+
+```javascript
+const { HSMClient } = require('hsm-sdk');
+
+class HSMKeyManager {
+    constructor(hsmConfig) {
+        this.client = new HSMClient(hsmConfig);
+    }
+    
+    async generateKey(keyId) {
+        return await this.client.generateKey(keyId, {
+            algorithm: 'AES',
+            keySize: 256
+        });
+    }
+    
+    async encrypt(keyId, data) {
+        return await this.client.encrypt(keyId, data);
+    }
+    
+    async decrypt(keyId, encryptedData) {
+        return await this.client.decrypt(keyId, encryptedData);
+    }
+}
+```
+
+#### Key Vaults (Cloud)
+
+Services cloud pour la gestion des clés.
+
+```javascript
+const { KeyVaultClient } = require('@azure/keyvault-keys');
+
+class AzureKeyVaultManager {
+    constructor(vaultUrl) {
+        this.client = new KeyVaultClient(vaultUrl);
+    }
+    
+    async getKey(keyName) {
+        const key = await this.client.getKey(keyName);
+        return key.keyMaterial;
+    }
+    
+    async createKey(keyName) {
+        return await this.client.createKey(keyName, 'AES', {
+            keySize: 256
+        });
+    }
+}
+```
+
+#### Chiffrement des clés (KEK)
+
+Chiffrer les clés avec une clé maître (Key Encryption Key).
+
+```javascript
+class KeyEncryptionService {
+    constructor(masterKey) {
+        this.masterKey = masterKey;
+    }
+    
+    async encryptDataKey(dataKey) {
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', this.masterKey, iv);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(dataKey),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            iv: iv.toString('hex'),
+            encrypted: encrypted.toString('hex'),
+            authTag: authTag.toString('hex')
+        };
+    }
+    
+    async decryptDataKey(encryptedDataKey) {
+        const iv = Buffer.from(encryptedDataKey.iv, 'hex');
+        const encrypted = Buffer.from(encryptedDataKey.encrypted, 'hex');
+        const authTag = Buffer.from(encryptedDataKey.authTag, 'hex');
+        
+        const decipher = crypto.createDecipheriv('aes-256-gcm', this.masterKey, iv);
+        decipher.setAuthTag(authTag);
+        
+        return Buffer.concat([
+            decipher.update(encrypted),
+            decipher.final()
+        ]);
+    }
+}
+```
+
+### Rotation des clés
+
+Changer régulièrement les clés pour limiter l'impact d'une compromission.
+
+```javascript
+class KeyRotationService {
+    constructor(keyManager) {
+        this.keyManager = keyManager;
+    }
+    
+    async rotateKey(keyId) {
+        const oldKey = await this.keyManager.getKey(keyId);
+        const newKey = await this.keyManager.generateKey(keyId + '_new');
+        
+        await this.reEncryptData(oldKey, newKey);
+        
+        await this.keyManager.updateKey(keyId, newKey);
+        await this.keyManager.archiveKey(keyId + '_old', oldKey);
+    }
+    
+    async reEncryptData(oldKey, newKey) {
+        const encryptedData = await this.getAllEncryptedData();
+        
+        for (const data of encryptedData) {
+            const decrypted = await this.decrypt(data, oldKey);
+            const reEncrypted = await this.encrypt(decrypted, newKey);
+            await this.updateEncryptedData(data.id, reEncrypted);
+        }
+    }
+}
+```
+
+## IV et Nonces
+
+### Initialization Vector (IV)
+
+Valeur aléatoire utilisée avec la clé pour chiffrer les données.
+
+**Règles :**
+- Unique pour chaque chiffrement avec la même clé
+- Aléatoire et imprévisible
+- Longueur : 128 bits pour AES
+- Peut être stocké en clair avec le ciphertext
+
+```javascript
+function generateIV() {
+    return crypto.randomBytes(16);
+}
+
+const iv = generateIV();
+const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+```
+
+### Nonce (Number used ONCE)
+
+Similaire à l'IV, mais peut être séquentiel pour certains modes.
+
+```javascript
+function generateNonce() {
+    return crypto.randomBytes(12);
+}
+
+const nonce = generateNonce();
+const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
+```
+
+### ⚠️ Réutilisation d'IV/Nonce
+
+Ne jamais réutiliser un IV/nonce avec la même clé.
+
+```javascript
+// ❌ Vulnérable
+const iv = Buffer.from('00000000000000000000000000000000', 'hex');
+const cipher1 = crypto.createCipheriv('aes-256-cbc', key, iv);
+const cipher2 = crypto.createCipheriv('aes-256-cbc', key, iv);
+
+// ✅ Correct
+const iv1 = crypto.randomBytes(16);
+const iv2 = crypto.randomBytes(16);
+```
+
+## Chiffrement au repos vs en transit
+
+### Chiffrement en transit
+
+Protège les données pendant leur transmission sur le réseau.
+
+**Technologies :**
+- HTTPS/TLS
+- VPN
+- SSH
+
+```javascript
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+    key: fs.readFileSync('private-key.pem'),
+    cert: fs.readFileSync('certificate.pem'),
+    minVersion: 'TLSv1.2'
+};
+
+const server = https.createServer(options, (req, res) => {
+    res.writeHead(200);
+    res.end('Encrypted connection');
+});
+```
+
+### Chiffrement au repos
+
+Protège les données stockées sur disque ou en base de données.
+
+**Techniques :**
+
+#### Chiffrement au niveau fichier
+
+```javascript
+class FileEncryption {
+    constructor(key) {
+        this.key = key;
+    }
+    
+    async encryptFile(filePath) {
+        const data = await fs.promises.readFile(filePath);
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', this.key, iv);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(data),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        await fs.promises.writeFile(filePath + '.enc', JSON.stringify({
+            iv: iv.toString('hex'),
+            data: encrypted.toString('hex'),
+            tag: authTag.toString('hex')
+        }));
+    }
+}
+```
+
+#### Chiffrement au niveau base de données
+
+```javascript
+class DatabaseEncryption {
+    constructor(keyManager) {
+        this.keyManager = keyManager;
+    }
+    
+    async encryptField(value, fieldKeyId) {
+        const key = await this.keyManager.getKey(fieldKeyId);
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        
+        const encrypted = Buffer.concat([
+            cipher.update(value, 'utf8'),
+            cipher.final()
+        ]);
+        
+        return {
+            iv: iv.toString('hex'),
+            data: encrypted.toString('hex'),
+            tag: cipher.getAuthTag().toString('hex')
+        };
+    }
+}
+```
+
+#### Full Disk Encryption (FDE)
+
+Chiffrement de tout le disque (BitLocker, FileVault, LUKS).
+
+## Implémentation complète
+
+```javascript
+const crypto = require('crypto');
+
+class EncryptionService {
+    constructor(keyManager) {
+        this.keyManager = keyManager;
+        this.algorithm = 'aes-256-gcm';
+    }
+    
+    async encrypt(plaintext, keyId, additionalData = null) {
+        const key = await this.keyManager.getKey(keyId);
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv(this.algorithm, key, iv);
+        
+        if (additionalData) {
+            cipher.setAAD(Buffer.from(additionalData, 'utf8'));
+        }
+        
+        const encrypted = Buffer.concat([
+            cipher.update(plaintext, 'utf8'),
+            cipher.final()
+        ]);
+        
+        const authTag = cipher.getAuthTag();
+        
+        return {
+            iv: iv.toString('hex'),
+            encrypted: encrypted.toString('hex'),
+            authTag: authTag.toString('hex'),
+            algorithm: this.algorithm
+        };
+    }
+    
+    async decrypt(encryptedData, keyId, additionalData = null) {
+        const key = await this.keyManager.getKey(keyId);
+        const iv = Buffer.from(encryptedData.iv, 'hex');
+        const encrypted = Buffer.from(encryptedData.encrypted, 'hex');
+        const authTag = Buffer.from(encryptedData.authTag, 'hex');
+        
+        const decipher = crypto.createDecipheriv(this.algorithm, key, iv);
+        decipher.setAuthTag(authTag);
+        
+        if (additionalData) {
+            decipher.setAAD(Buffer.from(additionalData, 'utf8'));
+        }
+        
+        const decrypted = Buffer.concat([
+            decipher.update(encrypted),
+            decipher.final()
+        ]);
+        
+        return decrypted.toString('utf8');
+    }
+    
+    async rotateKey(keyId) {
+        const rotationService = new KeyRotationService(this.keyManager);
+        await rotationService.rotateKey(keyId);
+    }
+}
+```
+
+## Vulnérabilités
+
+### Padding Oracle Attack
+
+Affecte les modes avec padding (CBC).
+
+**Protection :** Utiliser des modes authentifiés (GCM, CCM).
+
+### Chosen Plaintext Attack
+
+Attaquant peut choisir les plaintexts à chiffrer.
+
+**Protection :** Utiliser des modes sécurisés et des clés fortes.
+
+### Side-Channel Attacks
+
+Attaques exploitant les fuites d'information (timing, cache).
+
+**Protection :** Utiliser des implémentations résistantes (AES-NI, constant-time).
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser AES-256-GCM pour les nouvelles applications
+- [ ] Générer des clés avec des CSPRNG
+- [ ] Utiliser des IV/nonces uniques et aléatoires
+- [ ] Ne jamais réutiliser les clés ou les IV
+- [ ] Stocker les clés de manière sécurisée (HSM, vaults)
+- [ ] Implémenter la rotation des clés
+- [ ] Vérifier les tags d'authentification (GCM)
+- [ ] Ne jamais stocker de clés en clair dans le code
+- [ ] Utiliser des modes authentifiés (GCM, CCM)
+- [ ] Éviter ECB et CBC sans MAC
+- [ ] Documenter les choix cryptographiques
+- [ ] Tester les implémentations
+- [ ] Monitorer l'utilisation des clés
+- [ ] Former l'équipe sur le chiffrement
+
+## Conclusion
+
+Le chiffrement est essentiel pour protéger la confidentialité des données. Une implémentation correcte - avec des algorithmes modernes (AES-256-GCM), une gestion sécurisée des clés, et des IV uniques - est cruciale pour garantir la sécurité des données.
+
+## Références techniques
+
+- [NIST FIPS 197 - Advanced Encryption Standard](https://csrc.nist.gov/publications/detail/fips/197/final)
+- [NIST SP 800-38A - Block Cipher Modes](https://csrc.nist.gov/publications/detail/sp/800-38a/final)
+- [NIST SP 800-57 - Key Management](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final)
+- [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)

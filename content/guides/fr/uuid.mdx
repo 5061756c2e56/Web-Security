@@ -1,0 +1,347 @@
+---
+title: "UUID (Universally Unique Identifier) - Guide complet"
+category: "best-practices"
+description: "Guide expert sur les UUID : versions (v1-v7), génération sécurisée, collisions, sécurité, cas d'usage, implémentations et bonnes pratiques."
+coverImage: "/guides/uuid.jpg"
+date: "2024-03-09"
+difficulty: "intermédiaire"
+readingTime: "35 min"
+prerequisites: ["Nombres aléatoires", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# UUID (Universally Unique Identifier) - Guide complet
+
+Les UUID (Universally Unique Identifier) sont des identifiants uniques de 128 bits utilisés pour identifier des ressources de manière unique sans coordination centralisée. Ils sont largement utilisés dans les systèmes distribués et les bases de données.
+
+## Introduction
+
+Un UUID est un identifiant de 128 bits (16 bytes) représenté sous forme hexadécimale avec des tirets :
+
+```
+550e8400-e29b-41d4-a716-446655440000
+```
+
+**Format :** 8-4-4-4-12 caractères hexadécimaux
+
+**Avantages :**
+- Unicité sans coordination
+- Pas de collision pratique
+- Standardisé (RFC 4122)
+- Support universel
+
+**Inconvénients :**
+- Taille (128 bits)
+- Pas toujours URL-safe
+- Certaines versions révèlent des informations
+
+## Versions UUID
+
+### UUID v1 (Basé sur le temps)
+
+Généré à partir de l'adresse MAC et du timestamp.
+
+**Structure :**
+- 60 bits : Timestamp
+- 14 bits : Version + Variant
+- 48 bits : Adresse MAC
+- 6 bits : Clock sequence
+
+**Caractéristiques :**
+- Ordonné chronologiquement
+- Révèle l'adresse MAC (privacy)
+- Révèle le timestamp (privacy)
+
+**Utilisation :** Généralement évité pour des raisons de confidentialité.
+
+```javascript
+const { v1: uuidv1 } = require('uuid');
+
+const uuid = uuidv1();
+console.log(uuid); // "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+```
+
+### UUID v2 (DCE Security)
+
+Basé sur v1 avec des identifiants locaux. Rarement utilisé.
+
+### UUID v3 (Basé sur le namespace et le nom, MD5)
+
+Généré à partir d'un namespace UUID et d'un nom, hachés avec MD5.
+
+**Caractéristiques :**
+- Déterministe (même namespace + nom = même UUID)
+- Utilise MD5 (obsolète)
+- Non recommandé
+
+```javascript
+const { v3: uuidv3 } = require('uuid');
+
+const MY_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+const uuid = uuidv3('hello', MY_NAMESPACE);
+```
+
+### UUID v4 (Aléatoire)
+
+Généré de manière aléatoire. **Le plus utilisé pour la sécurité.**
+
+**Structure :**
+- 122 bits : Aléatoires
+- 6 bits : Version + Variant
+
+**Caractéristiques :**
+- Non prévisible
+- Pas d'information révélée
+- Nécessite un CSPRNG
+
+**Utilisation :** Recommandé pour la plupart des cas d'usage.
+
+```javascript
+const { v4: uuidv4 } = require('uuid');
+
+const uuid = uuidv4();
+console.log(uuid); // "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+```
+
+### UUID v5 (Basé sur le namespace et le nom, SHA-1)
+
+Similaire à v3 mais utilise SHA-1 au lieu de MD5.
+
+**Caractéristiques :**
+- Déterministe
+- Utilise SHA-1 (acceptable mais pas idéal)
+- Alternative à v3
+
+```javascript
+const { v5: uuidv5 } = require('uuid');
+
+const MY_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+const uuid = uuidv5('hello', MY_NAMESPACE);
+```
+
+### UUID v6 (Basé sur le temps, ordonné)
+
+Amélioration de v1 avec meilleur ordre temporel.
+
+### UUID v7 (Basé sur le temps Unix, ordonné)
+
+Basé sur le timestamp Unix avec meilleure ordonnancement.
+
+## Génération sécurisée
+
+### UUID v4 avec CSPRNG
+
+```javascript
+const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
+
+// UUID v4 utilise déjà crypto.randomBytes() en interne
+const uuid = uuidv4();
+```
+
+### Vérification de la qualité
+
+```javascript
+function isSecureUUID(uuid) {
+    // Vérifier le format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(uuid)) {
+        return false;
+    }
+    
+    // Vérifier la version (4 pour aléatoire)
+    const version = parseInt(uuid[14], 16);
+    if (version !== 4) {
+        return false;
+    }
+    
+    return true;
+}
+```
+
+## Collisions
+
+### Probabilité de collision
+
+La probabilité de collision pour UUID v4 est extrêmement faible :
+
+```
+P(collision) ≈ n² / (2 × 2^122)
+```
+
+Où n est le nombre d'UUID générés.
+
+**Exemples :**
+- 1 million d'UUID : ~2.3 × 10^-18
+- 1 milliard d'UUID : ~2.3 × 10^-12
+- 2^61 UUID : ~50% (birthday paradox)
+
+### En pratique
+
+Pour avoir 50% de chance de collision, il faudrait générer environ 2^61 UUID, ce qui est pratiquement impossible.
+
+## Sécurité
+
+### UUID comme secrets
+
+**⚠️ Ne jamais utiliser UUID comme secrets :**
+
+```javascript
+// ❌ Vulnérable
+const secret = uuidv4(); // Prévisible si mal généré
+
+// ✅ Correct
+const secret = crypto.randomBytes(32).toString('hex');
+```
+
+### UUID comme identifiants
+
+UUID v4 est approprié pour les identifiants non secrets :
+
+```javascript
+// ✅ Correct
+const userId = uuidv4();
+const sessionId = uuidv4();
+const resourceId = uuidv4();
+```
+
+### UUID comme tokens
+
+Pour les tokens, utiliser des générateurs spécialisés :
+
+```javascript
+// ❌ UUID pour token de session
+const sessionToken = uuidv4();
+
+// ✅ Token sécurisé
+const sessionToken = crypto.randomBytes(32).toString('base64url');
+```
+
+## Cas d'usage
+
+### Identifiants de base de données
+
+```javascript
+const user = {
+    id: uuidv4(),
+    name: 'John Doe',
+    email: 'john@example.com'
+};
+```
+
+### Tokens de session
+
+```javascript
+function createSession(userId) {
+    const sessionId = uuidv4();
+    sessions.set(sessionId, {
+        userId,
+        createdAt: Date.now()
+    });
+    return sessionId;
+}
+```
+
+### Identifiants d'API
+
+```javascript
+function generateAPIKey() {
+    return uuidv4();
+}
+```
+
+### Clés de cache
+
+```javascript
+function getCacheKey(userId, resource) {
+    return `user:${userId}:${resource}:${uuidv4()}`;
+}
+```
+
+## Implémentations
+
+### Node.js
+
+```javascript
+const { v4: uuidv4, v1: uuidv1, v5: uuidv5 } = require('uuid');
+
+// UUID v4 (recommandé)
+const uuid = uuidv4();
+
+// UUID v1 (basé sur le temps)
+const timeBasedUuid = uuidv1();
+
+// UUID v5 (déterministe)
+const namespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+const deterministicUuid = uuidv5('hello', namespace);
+```
+
+### Génération manuelle
+
+```javascript
+function generateUUIDv4() {
+    const bytes = crypto.randomBytes(16);
+    
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    
+    const hex = bytes.toString('hex');
+    return [
+        hex.slice(0, 8),
+        hex.slice(8, 12),
+        hex.slice(12, 16),
+        hex.slice(16, 20),
+        hex.slice(20, 32)
+    ].join('-');
+}
+```
+
+### Validation
+
+```javascript
+function isValidUUID(uuid) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-7][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+}
+
+function getUUIDVersion(uuid) {
+    if (!isValidUUID(uuid)) {
+        return null;
+    }
+    return parseInt(uuid[14], 16);
+}
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser UUID v4 pour la plupart des cas d'usage
+- [ ] S'assurer que le générateur utilise un CSPRNG
+- [ ] Ne jamais utiliser UUID comme secrets
+- [ ] Valider le format des UUID reçus
+- [ ] Utiliser UUID v5 pour les identifiants déterministes
+- [ ] Éviter UUID v1 pour des raisons de confidentialité
+- [ ] Documenter le choix de version
+- [ ] Tester la génération d'UUID
+- [ ] Monitorer les collisions (bien que très improbables)
+- [ ] Utiliser des bibliothèques réputées
+
+### Choix de version
+
+| Cas d'usage | Version recommandée |
+|-------------|---------------------|
+| Identifiants généraux | v4 |
+| Identifiants déterministes | v5 |
+| Identifiants ordonnés | v7 |
+| Tokens/secrets | Ne pas utiliser UUID |
+
+## Conclusion
+
+Les UUID v4 générés de manière sécurisée sont excellents pour créer des identifiants uniques sans coordination. Cependant, ils ne doivent pas être utilisés comme secrets ou tokens de sécurité. Comprendre les différentes versions et leurs caractéristiques permet de faire le bon choix selon le cas d'usage.
+
+## Références techniques
+
+- [RFC 4122 - A Universally Unique IDentifier (UUID) URN Namespace](https://tools.ietf.org/html/rfc4122)
+- [UUID Best Practices](https://www.uuidtools.com/uuid-best-practices)
+- [IETF Draft - UUID Version 7](https://datatracker.ietf.org/doc/html/draft-ietf-uuidrev-rfc4122bis)

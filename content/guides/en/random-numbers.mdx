@@ -1,0 +1,58 @@
+---
+title: "Cryptographic Random Numbers"
+category: "best-practices"
+description: "Guide on random number generation: entropy sources, CSPRNG vs PRNG, vulnerabilities"
+coverImage: "/guides/random.jpg"
+date: "2024-03-10"
+---
+
+# Cryptographic Random Numbers
+
+Random number generation is fundamental in cryptography. The quality of randomness determines system security.
+
+## Entropy Sources
+
+### System Entropy
+
+- Mouse movements
+- Keystrokes
+- Thermal noise
+- System interrupts
+
+### Hardware Generators
+
+- Generators based on quantum noise
+- Physics-based generators
+
+## CSPRNG vs PRNG
+
+### PRNG (Pseudo-Random Number Generator)
+
+Deterministic, predictable if seed is known. **Do not use for cryptography.**
+
+### CSPRNG (Cryptographically Secure PRNG)
+
+Resistant to cryptographic attacks. Use for:
+- Key generation
+- Nonces and IVs
+- Tokens
+
+## Vulnerabilities
+
+- Weak or predictable seeds
+- Nonce reuse
+- Entropy leaks
+
+## Best Practices
+
+- Use CSPRNG for cryptography
+- Never reuse nonces
+- Verify entropy source quality
+
+## Conclusion
+
+Secure random number generation is essential. Always use CSPRNG for cryptographic applications.
+
+
+
+

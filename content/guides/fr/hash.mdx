@@ -1,0 +1,526 @@
+---
+title: "Fonctions de hachage cryptographique - Guide complet"
+category: "cryptography"
+description: "Guide expert sur les fonctions de hachage : SHA-256, SHA-512, SHA-3, collisions, rainbow tables, salage, HMAC, applications, vulnérabilités et bonnes pratiques."
+coverImage: "/guides/hash.jpg"
+date: "2024-03-02"
+difficulty: "avancé"
+readingTime: "45 min"
+prerequisites: ["Cryptographie", "Algorithmes", "Sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Fonctions de hachage cryptographique - Guide complet
+
+Les fonctions de hachage sont des fonctions mathématiques unidirectionnelles qui transforment des données de taille variable en une valeur de taille fixe (empreinte ou digest). Elles sont fondamentales en cryptographie et sécurité informatique.
+
+## Introduction
+
+Une fonction de hachage cryptographique prend une entrée de taille arbitraire et produit une sortie de taille fixe (généralement 256 ou 512 bits). Cette transformation est :
+
+- **Déterministe** : Même entrée = même sortie
+- **Rapide** : Calcul efficace
+- **Irréversible** : Impossible de retrouver l'entrée à partir du hash
+- **Résistante aux collisions** : Difficile de trouver deux entrées avec le même hash
+
+## Propriétés des fonctions de hachage
+
+### Déterministe
+
+La même entrée produit toujours la même sortie.
+
+```javascript
+const crypto = require('crypto');
+
+const hash1 = crypto.createHash('sha256').update('hello').digest('hex');
+const hash2 = crypto.createHash('sha256').update('hello').digest('hex');
+
+console.log(hash1 === hash2); // true
+```
+
+### Rapide
+
+Le calcul du hash doit être rapide pour des données de toute taille.
+
+```javascript
+function hashLargeFile(filePath) {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    
+    stream.on('data', (data) => {
+        hash.update(data);
+    });
+    
+    stream.on('end', () => {
+        console.log(hash.digest('hex'));
+    });
+}
+```
+
+### Irréversible
+
+Il doit être mathématiquement impossible de retrouver l'entrée à partir du hash.
+
+```javascript
+// Impossible de retrouver "hello" à partir de :
+// 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+```
+
+### Résistant aux collisions
+
+Il doit être difficile de trouver deux entrées différentes produisant le même hash.
+
+**Principe des tiroirs :** Avec 2^256 hash possibles, il y a forcément des collisions, mais elles doivent être impossibles à trouver.
+
+### Effet avalanche
+
+Un petit changement dans l'entrée doit produire un hash complètement différent.
+
+```javascript
+const hash1 = crypto.createHash('sha256').update('hello').digest('hex');
+const hash2 = crypto.createHash('sha256').update('Hello').digest('hex');
+
+console.log(hash1); // 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+console.log(hash2); // 3615f80c9d293a80c5d5b9dfcb41d314b35d5c3d3d5c5c5c5c5c5c5c5c5c5c5c
+// Complètement différent malgré un seul caractère changé
+```
+
+## Algorithmes de hachage
+
+### SHA-256
+
+Fonction de hachage produisant un digest de 256 bits (32 bytes). Partie de la famille SHA-2.
+
+**Caractéristiques :**
+- Résistant aux collisions
+- Largement utilisé (Bitcoin, TLS, Git)
+- Performant
+- Standard NIST
+
+**Exemple :**
+```javascript
+const crypto = require('crypto');
+
+const hash = crypto.createHash('sha256')
+    .update('hello')
+    .digest('hex');
+
+console.log(hash);
+// 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+```
+
+**Utilisation :**
+- Vérification d'intégrité
+- Preuve de travail (Bitcoin)
+- Signatures numériques
+- Dérivation de clés
+
+### SHA-512
+
+Fonction de hachage produisant un digest de 512 bits (64 bytes).
+
+**Caractéristiques :**
+- Plus sécurisé que SHA-256
+- Plus lent que SHA-256
+- Utilisé pour des applications nécessitant une sécurité élevée
+
+```javascript
+const hash = crypto.createHash('sha512')
+    .update('hello')
+    .digest('hex');
+```
+
+### SHA-3
+
+Standard moderne basé sur Keccak. Différent de SHA-2.
+
+**Caractéristiques :**
+- Basé sur une structure différente (sponge construction)
+- Offre une sécurité supplémentaire
+- Alternative à SHA-2
+
+```javascript
+const { createHash } = require('crypto');
+const hash = createHash('sha3-256')
+    .update('hello')
+    .digest('hex');
+```
+
+### MD5
+
+**⚠️ À éviter absolument**
+
+Vulnérable aux collisions, obsolète pour la sécurité.
+
+**Problèmes :**
+- Collisions faciles à trouver
+- Attaques par force brute efficaces
+- Ne pas utiliser pour la sécurité
+
+**Utilisation acceptable :** Uniquement pour des checksums non sécurisés.
+
+### SHA-1
+
+**⚠️ À éviter**
+
+Vulnérable aux collisions, obsolète pour la sécurité.
+
+**Problèmes :**
+- Collisions trouvées en 2017 (SHAttered attack)
+- Ne pas utiliser pour la sécurité
+
+## Applications
+
+### Vérification d'intégrité
+
+Vérifier qu'un fichier n'a pas été modifié.
+
+```javascript
+class FileIntegrityChecker {
+    async calculateFileHash(filePath) {
+        const hash = crypto.createHash('sha256');
+        const data = await fs.promises.readFile(filePath);
+        hash.update(data);
+        return hash.digest('hex');
+    }
+    
+    async verifyFileIntegrity(filePath, expectedHash) {
+        const actualHash = await this.calculateFileHash(filePath);
+        return actualHash === expectedHash;
+    }
+}
+```
+
+### Stockage de mots de passe
+
+**⚠️ Important :** Ne jamais utiliser SHA-256 directement pour les mots de passe. Utiliser des fonctions adaptatives (bcrypt, Argon2).
+
+```javascript
+// ❌ Vulnérable
+const passwordHash = crypto.createHash('sha256')
+    .update(password)
+    .digest('hex');
+
+// ✅ Correct
+const bcrypt = require('bcrypt');
+const passwordHash = await bcrypt.hash(password, 12);
+```
+
+### Preuve de travail (Proof of Work)
+
+Utilisé dans les blockchains (Bitcoin) pour valider les transactions.
+
+```javascript
+function proofOfWork(data, difficulty) {
+    let nonce = 0;
+    const target = '0'.repeat(difficulty);
+    
+    while (true) {
+        const hash = crypto.createHash('sha256')
+            .update(data + nonce)
+            .digest('hex');
+        
+        if (hash.startsWith(target)) {
+            return { nonce, hash };
+        }
+        
+        nonce++;
+    }
+}
+```
+
+### HMAC (Hash-based Message Authentication Code)
+
+Combinaison d'une fonction de hachage avec une clé secrète.
+
+```javascript
+function calculateHMAC(message, key) {
+    return crypto.createHmac('sha256', key)
+        .update(message)
+        .digest('hex');
+}
+
+function verifyHMAC(message, key, expectedHMAC) {
+    const calculated = calculateHMAC(message, key);
+    return crypto.timingSafeEqual(
+        Buffer.from(calculated),
+        Buffer.from(expectedHMAC)
+    );
+}
+```
+
+### Tables de hachage
+
+Structure de données utilisant des hash pour un accès rapide.
+
+```javascript
+class HashTable {
+    constructor(size = 1000) {
+        this.buckets = new Array(size);
+    }
+    
+    hash(key) {
+        const hash = crypto.createHash('sha256')
+            .update(key)
+            .digest('hex');
+        return parseInt(hash.substring(0, 8), 16) % this.buckets.length;
+    }
+    
+    set(key, value) {
+        const index = this.hash(key);
+        if (!this.buckets[index]) {
+            this.buckets[index] = [];
+        }
+        this.buckets[index].push({ key, value });
+    }
+    
+    get(key) {
+        const index = this.hash(key);
+        const bucket = this.buckets[index];
+        if (!bucket) return null;
+        
+        const item = bucket.find(item => item.key === key);
+        return item ? item.value : null;
+    }
+}
+```
+
+## Collisions
+
+### Définition
+
+Deux entrées différentes produisant le même hash. Les collisions sont inévitables (principe des tiroirs) mais doivent être difficiles à trouver.
+
+### Types de collisions
+
+#### Collision simple
+
+Trouver deux entrées différentes avec le même hash.
+
+```javascript
+// Théoriquement possible mais pratiquement impossible avec SHA-256
+const input1 = "message1";
+const input2 = "message2";
+// Probabilité que hash(input1) === hash(input2) : ~2^-256
+```
+
+#### Collision de seconde préimage
+
+Trouver une entrée produisant un hash donné.
+
+```javascript
+// Encore plus difficile
+const targetHash = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+// Trouver un message tel que hash(message) === targetHash
+```
+
+### Protection
+
+Utiliser des fonctions de hachage modernes (SHA-256, SHA-3) avec des digests suffisamment longs.
+
+## Rainbow Tables
+
+### Principe
+
+Tables précalculées de hash de mots de passe permettant de retrouver rapidement un mot de passe à partir de son hash.
+
+**Exemple :**
+```
+password123 → hash1
+password456 → hash2
+...
+```
+
+### Protection : Salage
+
+Ajouter un sel (valeur aléatoire unique) à chaque mot de passe avant le hachage.
+
+```javascript
+const crypto = require('crypto');
+
+function hashPasswordWithSalt(password) {
+    const salt = crypto.randomBytes(16);
+    const hash = crypto.createHash('sha256')
+        .update(password + salt.toString('hex'))
+        .digest('hex');
+    
+    return {
+        hash: hash,
+        salt: salt.toString('hex')
+    };
+}
+
+function verifyPasswordWithSalt(password, hash, salt) {
+    const calculatedHash = crypto.createHash('sha256')
+        .update(password + salt)
+        .digest('hex');
+    
+    return calculatedHash === hash;
+}
+```
+
+Le sel rend les rainbow tables inutiles car chaque mot de passe a un hash unique même s'il est identique.
+
+## Hachage de mots de passe
+
+### Fonctions adaptatives
+
+Les fonctions de hachage standard (SHA-256) sont trop rapides pour les mots de passe. Utiliser des fonctions adaptatives :
+
+#### bcrypt
+
+Ralentit avec le temps (facteur de coût).
+
+```javascript
+const bcrypt = require('bcrypt');
+const saltRounds = 12;
+
+const hash = await bcrypt.hash(password, saltRounds);
+const isValid = await bcrypt.compare(password, hash);
+```
+
+#### Argon2
+
+Résistant aux attaques GPU/ASIC.
+
+```javascript
+const argon2 = require('argon2');
+
+const hash = await argon2.hash(password, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4
+});
+
+const isValid = await argon2.verify(hash, password);
+```
+
+#### scrypt
+
+Coûteux en mémoire.
+
+```javascript
+const scrypt = require('scrypt-js');
+
+const salt = crypto.randomBytes(16);
+const hash = await scrypt.scrypt(
+    Buffer.from(password),
+    salt,
+    16384,
+    8,
+    1,
+    64
+);
+```
+
+#### PBKDF2
+
+Standard NIST, moins performant qu'Argon2.
+
+```javascript
+const hash = crypto.pbkdf2Sync(
+    password,
+    salt,
+    100000,
+    64,
+    'sha512'
+);
+```
+
+## HMAC (Hash-based Message Authentication Code)
+
+HMAC combine une fonction de hachage avec une clé secrète pour authentifier des messages.
+
+### Principe
+
+```
+HMAC(key, message) = H(key ⊕ opad || H(key ⊕ ipad || message))
+```
+
+### Utilisation
+
+```javascript
+class HMACService {
+    calculateHMAC(message, key, algorithm = 'sha256') {
+        return crypto.createHmac(algorithm, key)
+            .update(message)
+            .digest('hex');
+    }
+    
+    verifyHMAC(message, key, expectedHMAC, algorithm = 'sha256') {
+        const calculated = this.calculateHMAC(message, key, algorithm);
+        return crypto.timingSafeEqual(
+            Buffer.from(calculated),
+            Buffer.from(expectedHMAC)
+        );
+    }
+}
+
+// Utilisation
+const hmacService = new HMACService();
+const message = "Important data";
+const key = crypto.randomBytes(32);
+
+const hmac = hmacService.calculateHMAC(message, key);
+const isValid = hmacService.verifyHMAC(message, key, hmac);
+```
+
+### Cas d'usage
+
+- Authentification de messages
+- Tokens sécurisés
+- Vérification d'intégrité avec clé
+- Signatures d'API
+
+## Vulnérabilités
+
+### Collisions
+
+Les collisions peuvent être exploitées pour :
+
+- Créer des fichiers avec le même hash
+- Contourner les vérifications d'intégrité
+- Forger des signatures
+
+**Protection :** Utiliser SHA-256 ou SHA-3.
+
+### Attaques par extension (Length Extension)
+
+Affecte certaines fonctions de hachage (MD5, SHA-1, SHA-256).
+
+**Protection :** Utiliser HMAC au lieu de hash simple.
+
+### Attaques par force brute
+
+Pour les mots de passe, les hash rapides permettent des attaques efficaces.
+
+**Protection :** Utiliser des fonctions adaptatives (bcrypt, Argon2).
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser SHA-256 ou SHA-512 pour l'intégrité des données
+- [ ] Utiliser SHA-3 pour des applications nécessitant une sécurité maximale
+- [ ] Utiliser des fonctions adaptatives (bcrypt, Argon2) pour les mots de passe
+- [ ] Toujours saler les mots de passe avant le hachage
+- [ ] Utiliser des sels uniques et aléatoires (minimum 16 bytes)
+- [ ] Ne jamais utiliser MD5 ou SHA-1 pour la sécurité
+- [ ] Utiliser HMAC pour l'authentification de messages
+- [ ] Vérifier régulièrement les collisions découvertes
+- [ ] Utiliser des comparaisons à temps constant pour HMAC
+- [ ] Documenter les choix d'algorithmes
+- [ ] Tester les implémentations
+- [ ] Monitorer l'utilisation des fonctions de hachage
+
+## Conclusion
+
+Les fonctions de hachage sont essentielles en cybersécurité. Leur utilisation correcte - avec des algorithmes modernes (SHA-256, SHA-3), des techniques comme le salage, et des fonctions adaptatives pour les mots de passe - est cruciale pour protéger les données et les mots de passe.
+
+## Références techniques
+
+- [NIST FIPS 180-4 - Secure Hash Standard](https://csrc.nist.gov/publications/detail/fips/180/4/final)
+- [NIST FIPS 202 - SHA-3 Standard](https://csrc.nist.gov/publications/detail/fips/202/final)
+- [RFC 2104 - HMAC](https://tools.ietf.org/html/rfc2104)
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)

@@ -1,0 +1,47 @@
+---
+title: "UUID (Universally Unique Identifier)"
+category: "best-practices"
+description: "Guide on UUIDs: versions, collisions, security and use cases"
+coverImage: "/guides/uuid.jpg"
+date: "2024-03-09"
+---
+
+# UUID (Universally Unique Identifier)
+
+UUIDs are 128-bit unique identifiers used to identify resources uniquely without central coordination.
+
+## Versions
+
+### UUID v4 (Random)
+
+Generated randomly. Most used for security.
+
+**Characteristics:**
+- 122 bits of entropy
+- Cryptographically secure generation recommended
+- Extremely low collision probability
+
+### UUID v1 (Time-based)
+
+Includes MAC address and timestamp. Less secure (reveals information).
+
+## Security
+
+- Use cryptographically secure generators for v4
+- Don't use UUIDs as secrets (they are predictable if poorly generated)
+- UUID v4 is recommended for security
+
+## Use Cases
+
+- Database identifiers
+- Session tokens
+- API identifiers
+- Cache keys
+
+## Conclusion
+
+Securely generated UUID v4 are excellent for creating unique identifiers without coordination.
+
+
+
+

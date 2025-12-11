@@ -1,0 +1,75 @@
+---
+title: "SQL Injection"
+category: "web-security"
+description: "Complete guide on SQL Injection: types, exploitation, protection (prepared statements, ORM)"
+coverImage: "/guides/sql-injection.jpg"
+date: "2024-03-14"
+---
+
+# SQL Injection
+
+SQL Injection is a vulnerability that allows an attacker to inject malicious SQL code into a query, compromising the database.
+
+## Principle
+
+### Classic Vulnerability
+
+```php
+$query = "SELECT * FROM users WHERE username = '" . $_GET['username'] . "'";
+```
+
+If user enters `' OR '1'='1`, the query becomes:
+```sql
+SELECT * FROM users WHERE username = '' OR '1'='1'
+```
+
+## Attack Types
+
+### Union-based
+
+Use UNION to extract data:
+```sql
+' UNION SELECT password FROM users--
+```
+
+### Error-based
+
+Exploit error messages to extract information.
+
+### Blind SQL Injection
+
+No direct return, but exploitation via behavior differences.
+
+## Protection
+
+### Prepared Statements
+
+Use parameterized queries:
+
+```javascript
+const query = 'SELECT * FROM users WHERE username = ?';
+db.query(query, [username]);
+```
+
+### ORM
+
+Use ORMs that automatically handle protection:
+
+```javascript
+User.findOne({ where: { username: username } });
+```
+
+## Best Practices
+
+- Always use prepared statements
+- Validate and sanitize inputs
+- Principle of least privilege for DB accounts
+- Never concatenate user inputs into SQL queries
+
+## Conclusion
+
+SQL Injection is a critical vulnerability. Prepared statements and ORMs provide effective protection.
+
+
+
+

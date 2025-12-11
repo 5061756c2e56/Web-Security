@@ -1,0 +1,45 @@
+---
+title: "Entropy Analysis"
+category: "best-practices"
+description: "Guide on entropy analysis: calculation, strength metrics, dictionary attacks"
+coverImage: "/guides/entropy.jpg"
+date: "2024-03-11"
+---
+
+# Entropy Analysis
+
+Entropy measures the unpredictability of a password or key. Entropy analysis allows evaluating the real strength of a password.
+
+## Entropy Calculation
+
+**Basic formula:** H = log₂(N^L)
+
+Where:
+- N = alphabet size
+- L = length
+
+## Strength Metrics
+
+- **< 28 bits**: Very weak
+- **28-35 bits**: Weak
+- **36-59 bits**: Medium
+- **60-127 bits**: Strong
+- **128+ bits**: Very strong
+
+## Dictionary Attacks
+
+Passwords based on dictionary words have much lower effective entropy than their theoretical entropy.
+
+## Recommendations
+
+- Minimum 60 bits of entropy for passwords
+- Use long passphrases
+- Avoid predictable patterns
+
+## Conclusion
+
+Entropy analysis allows objectively evaluating password strength and identifying weaknesses.
+
+
+
+

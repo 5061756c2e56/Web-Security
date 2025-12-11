@@ -1,0 +1,516 @@
+---
+title: "Dérivation de clés cryptographiques - Guide complet"
+category: "cryptography"
+description: "Guide expert sur la dérivation de clés : PBKDF2, Argon2, scrypt, bcrypt, comparaisons détaillées, paramètres de sécurité, résistance aux attaques GPU/ASIC, implémentations sécurisées et bonnes pratiques."
+coverImage: "/guides/key-derivation.jpg"
+date: "2024-03-04"
+difficulty: "avancé"
+readingTime: "45 min"
+prerequisites: ["Cryptographie", "Fonctions de hachage", "Sécurité des mots de passe"]
+lastUpdated: "2024-12-19"
+---
+
+# Dérivation de clés cryptographiques - Guide complet
+
+La dérivation de clés est le processus de génération d'une clé cryptographique à partir d'une autre clé, d'un mot de passe ou d'une autre source d'entropie. Elle est essentielle pour la sécurité des mots de passe et la génération de clés dans les applications modernes.
+
+## Introduction
+
+Les fonctions de dérivation de clés (KDF - Key Derivation Functions) transforment des entrées de faible entropie (comme les mots de passe) en clés cryptographiques fortes. Elles sont conçues pour être :
+
+- **Lentes** : Ralentir les attaques par force brute
+- **Coûteuses en ressources** : Résister aux attaques par GPU/ASIC
+- **Déterministes** : Même entrée = même sortie
+- **Irréversibles** : Impossible de retrouver l'entrée à partir de la sortie
+
+### Pourquoi dériver des clés ?
+
+#### Problème des mots de passe
+
+Les mots de passe humains ont une entropie faible (environ 20-40 bits) et sont vulnérables aux attaques par dictionnaire et force brute. Les fonctions de hachage standard (SHA-256, MD5) sont trop rapides et permettent des attaques à grande vitesse.
+
+#### Objectifs de la dérivation
+
+1. **Ralentir les attaques** : Augmenter le temps nécessaire pour tester chaque mot de passe
+2. **Résister au matériel spécialisé** : GPU, ASIC, FPGA
+3. **Générer des clés de taille fixe** : À partir d'entrées de taille variable
+4. **Augmenter l'entropie effective** : Transformer des entrées faibles en clés fortes
+
+## PBKDF2 (Password-Based Key Derivation Function 2)
+
+Standard NIST (RFC 2898) largement utilisé et supporté.
+
+### Caractéristiques
+
+- Basé sur une fonction de hachage (SHA-256, SHA-512)
+- Utilise des itérations pour ralentir les attaques
+- Paramètres : nombre d'itérations, longueur de clé, fonction de hachage
+- Résistant aux attaques par canal auxiliaire
+
+### Principe de fonctionnement
+
+```
+DK = PBKDF2(Password, Salt, Iterations, KeyLength, HashFunction)
+
+DK = Hash(Password || Salt || 1) || 
+     Hash(Password || Salt || 2) || 
+     ... || 
+     Hash(Password || Salt || n)
+```
+
+### Implémentation
+
+```javascript
+const crypto = require('crypto');
+
+function pbkdf2(password, salt, iterations, keyLength, hashFunction = 'sha256') {
+    return crypto.pbkdf2Sync(
+        password,
+        salt,
+        iterations,
+        keyLength,
+        hashFunction
+    );
+}
+
+// Utilisation
+const password = 'userPassword123';
+const salt = crypto.randomBytes(16);
+const iterations = 100000;
+const keyLength = 32;
+
+const derivedKey = pbkdf2(password, salt, iterations, keyLength, 'sha256');
+```
+
+### Paramètres recommandés
+
+**Itérations :**
+- Minimum : 100,000
+- Recommandé : 600,000+
+- Augmenter avec le temps (doubler tous les 2 ans)
+
+**Sel :**
+- Minimum : 16 bytes
+- Recommandé : 32 bytes
+- Aléatoire et unique pour chaque mot de passe
+
+**Fonction de hachage :**
+- SHA-256 (minimum)
+- SHA-512 (recommandé, plus résistant)
+
+### Exemple complet
+
+```javascript
+class PBKDF2Service {
+    constructor(iterations = 600000, hashFunction = 'sha512') {
+        this.iterations = iterations;
+        this.hashFunction = hashFunction;
+    }
+    
+    async hashPassword(password) {
+        const salt = crypto.randomBytes(32);
+        const hash = await this.deriveKey(password, salt);
+        
+        return {
+            hash: hash.toString('hex'),
+            salt: salt.toString('hex'),
+            iterations: this.iterations,
+            algorithm: 'PBKDF2',
+            hashFunction: this.hashFunction
+        };
+    }
+    
+    async verifyPassword(password, storedHash, salt, iterations) {
+        const hash = await this.deriveKey(password, Buffer.from(salt, 'hex'), iterations);
+        return hash.toString('hex') === storedHash;
+    }
+    
+    async deriveKey(password, salt, iterations = this.iterations) {
+        return new Promise((resolve, reject) => {
+            crypto.pbkdf2(
+                password,
+                salt,
+                iterations,
+                64,
+                this.hashFunction,
+                (err, derivedKey) => {
+                    if (err) reject(err);
+                    else resolve(derivedKey);
+                }
+            );
+        });
+    }
+}
+```
+
+### Limitations
+
+- **Faible résistance GPU** : Les GPU peuvent paralléliser efficacement
+- **Faible résistance ASIC** : Les ASIC peuvent être optimisés pour PBKDF2
+- **Pas de contrôle mémoire** : Ne peut pas être rendu coûteux en mémoire
+
+## Argon2
+
+Gagnant du Password Hashing Competition (2015). Considéré comme l'algorithme le plus sécurisé actuellement.
+
+### Variantes
+
+#### Argon2i (indépendant des données)
+
+Résistant aux attaques par canal auxiliaire. Recommandé pour les mots de passe.
+
+#### Argon2d (dépendant des données)
+
+Résistant aux attaques par GPU. Plus rapide mais vulnérable aux attaques par canal auxiliaire.
+
+#### Argon2id (hybride)
+
+Compromis entre les deux. **Recommandé pour la plupart des cas d'usage.**
+
+### Paramètres
+
+- **Mémoire (m)** : Quantité de mémoire utilisée (en KB)
+  - Minimum : 64 MB (65536 KB)
+  - Recommandé : 128-512 MB
+- **Temps (t)** : Nombre d'itérations
+  - Minimum : 2
+  - Recommandé : 3-5
+- **Parallélisme (p)** : Nombre de threads
+  - Minimum : 1
+  - Recommandé : 4-8
+
+### Implémentation
+
+```javascript
+const argon2 = require('argon2');
+
+class Argon2Service {
+    constructor(options = {}) {
+        this.options = {
+            type: argon2.argon2id,
+            memoryCost: options.memoryCost || 65536,
+            timeCost: options.timeCost || 3,
+            parallelism: options.parallelism || 4,
+            ...options
+        };
+    }
+    
+    async hashPassword(password) {
+        const hash = await argon2.hash(password, this.options);
+        return hash;
+    }
+    
+    async verifyPassword(password, hash) {
+        try {
+            return await argon2.verify(hash, password);
+        } catch (error) {
+            return false;
+        }
+    }
+}
+
+// Utilisation
+const argon2Service = new Argon2Service({
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4
+});
+
+const hash = await argon2Service.hashPassword('userPassword123');
+const isValid = await argon2Service.verifyPassword('userPassword123', hash);
+```
+
+### Avantages
+
+- **Résistance GPU/ASIC** : Coût mémoire élevé
+- **Paramètres adaptatifs** : Ajustable selon les ressources
+- **Standard moderne** : RFC 9106
+- **Meilleure sécurité** : Supérieur à PBKDF2 et bcrypt
+
+### Comparaison des paramètres
+
+```javascript
+// Configuration minimale (serveurs limités)
+const minimalConfig = {
+    memoryCost: 32768,
+    timeCost: 2,
+    parallelism: 2
+};
+
+// Configuration recommandée
+const recommendedConfig = {
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4
+};
+
+// Configuration haute sécurité
+const highSecurityConfig = {
+    memoryCost: 131072,
+    timeCost: 5,
+    parallelism: 8
+};
+```
+
+## Scrypt
+
+Conçu pour être coûteux en mémoire et en CPU, résistant aux attaques par matériel spécialisé.
+
+### Caractéristiques
+
+- Utilise une grande quantité de mémoire
+- Paramètres : N (facteur de coût), r (taille du bloc), p (parallélisme)
+- Résistant aux attaques par GPU/ASIC (moins qu'Argon2)
+
+### Paramètres
+
+- **N** : Facteur de coût (puissance de 2)
+  - Minimum : 16384
+  - Recommandé : 32768-65536
+- **r** : Taille du bloc
+  - Recommandé : 8
+- **p** : Parallélisme
+  - Recommandé : 1-4
+
+### Implémentation
+
+```javascript
+const scrypt = require('scrypt-js');
+
+class ScryptService {
+    constructor(N = 32768, r = 8, p = 1) {
+        this.N = N;
+        this.r = r;
+        this.p = p;
+    }
+    
+    async hashPassword(password, salt) {
+        const passwordBuffer = Buffer.from(password, 'utf8');
+        const saltBuffer = Buffer.from(salt, 'hex');
+        
+        const hash = await scrypt.scrypt(
+            passwordBuffer,
+            saltBuffer,
+            this.N,
+            this.r,
+            this.p,
+            64
+        );
+        
+        return Buffer.from(hash).toString('hex');
+    }
+    
+    async verifyPassword(password, hash, salt) {
+        const computedHash = await this.hashPassword(password, salt);
+        return computedHash === hash;
+    }
+}
+```
+
+## bcrypt
+
+Algorithme basé sur Blowfish, largement utilisé pour les mots de passe.
+
+### Caractéristiques
+
+- Facteur de coût adaptatif
+- Résistant aux attaques par force brute
+- Moins résistant aux attaques GPU que Argon2
+
+### Implémentation
+
+```javascript
+const bcrypt = require('bcrypt');
+
+class BcryptService {
+    constructor(saltRounds = 12) {
+        this.saltRounds = saltRounds;
+    }
+    
+    async hashPassword(password) {
+        const salt = await bcrypt.genSalt(this.saltRounds);
+        const hash = await bcrypt.hash(password, salt);
+        return hash;
+    }
+    
+    async verifyPassword(password, hash) {
+        return await bcrypt.compare(password, hash);
+    }
+}
+
+// Utilisation
+const bcryptService = new BcryptService(12);
+const hash = await bcryptService.hashPassword('userPassword123');
+const isValid = await bcryptService.verifyPassword('userPassword123', hash);
+```
+
+### Facteur de coût
+
+Le facteur de coût détermine le nombre d'itérations (2^cost) :
+
+- **10** : ~100ms (développement)
+- **12** : ~300ms (production recommandé)
+- **14** : ~1.2s (haute sécurité)
+- **16** : ~4.8s (très haute sécurité)
+
+## Comparaison détaillée
+
+| Algorithme | Résistance GPU | Résistance ASIC | Mémoire | Performance | Recommandation |
+|------------|----------------|-----------------|---------|-------------|----------------|
+| PBKDF2 | Faible | Faible | Faible | Rapide | Acceptable |
+| bcrypt | Moyenne | Moyenne | Faible | Moyenne | Bon |
+| Scrypt | Moyenne-Élevée | Moyenne-Élevée | Élevée | Moyenne | Bon |
+| Argon2 | Élevée | Élevée | Élevée | Moyenne | **Meilleur** |
+
+### Résistance aux attaques
+
+#### Attaques par GPU
+
+```javascript
+// PBKDF2 : Faible résistance
+// Les GPU peuvent tester des millions de mots de passe par seconde
+
+// Argon2 : Élevée résistance
+// La mémoire requise limite la parallélisation GPU
+```
+
+#### Attaques par ASIC
+
+```javascript
+// PBKDF2 : Faible résistance
+// Les ASIC peuvent être optimisés pour PBKDF2
+
+// Argon2 : Élevée résistance
+// La mémoire requise rend les ASIC coûteux
+```
+
+## Implémentation complète
+
+```javascript
+class KeyDerivationService {
+    constructor(algorithm = 'argon2') {
+        this.algorithm = algorithm;
+        
+        switch (algorithm) {
+            case 'argon2':
+                this.service = new Argon2Service({
+                    memoryCost: 65536,
+                    timeCost: 3,
+                    parallelism: 4
+                });
+                break;
+            case 'pbkdf2':
+                this.service = new PBKDF2Service(600000, 'sha512');
+                break;
+            case 'bcrypt':
+                this.service = new BcryptService(12);
+                break;
+            case 'scrypt':
+                this.service = new ScryptService(32768, 8, 1);
+                break;
+            default:
+                throw new Error('Unsupported algorithm');
+        }
+    }
+    
+    async hashPassword(password) {
+        return await this.service.hashPassword(password);
+    }
+    
+    async verifyPassword(password, hash) {
+        return await this.service.verifyPassword(password, hash);
+    }
+    
+    async deriveKey(password, salt, length = 32) {
+        if (this.algorithm === 'pbkdf2') {
+            return await this.service.deriveKey(password, salt, length);
+        }
+        throw new Error('Key derivation not supported for this algorithm');
+    }
+}
+```
+
+## Attaques et protections
+
+### Attaques par dictionnaire
+
+Tentative de deviner un mot de passe en essayant des mots courants.
+
+**Protection :**
+- Utiliser des fonctions de dérivation lentes
+- Augmenter le nombre d'itérations
+- Utiliser des sels uniques
+
+### Attaques par rainbow tables
+
+Tables précalculées de hash de mots de passe.
+
+**Protection :**
+- Utiliser des sels uniques (rend les rainbow tables inutiles)
+- Utiliser des fonctions de dérivation lentes
+
+### Attaques par force brute
+
+Tentative de deviner un mot de passe en essayant toutes les combinaisons.
+
+**Protection :**
+- Utiliser des fonctions de dérivation lentes
+- Augmenter le facteur de coût
+- Implémenter le rate limiting
+- Utiliser des mots de passe forts
+
+### Attaques par GPU/ASIC
+
+Utilisation de matériel spécialisé pour accélérer les attaques.
+
+**Protection :**
+- Utiliser Argon2 (résistance mémoire)
+- Augmenter la mémoire requise
+- Utiliser des paramètres élevés
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser Argon2id pour les nouvelles applications
+- [ ] Utiliser des sels uniques et aléatoires (minimum 16 bytes)
+- [ ] Ajuster les paramètres selon les capacités du serveur
+- [ ] Augmenter les itérations/facteur de coût avec le temps
+- [ ] Ne jamais stocker les mots de passe en clair
+- [ ] Vérifier régulièrement les recommandations de sécurité
+- [ ] Tester les performances avec les paramètres choisis
+- [ ] Documenter les paramètres utilisés
+- [ ] Implémenter le rate limiting sur les tentatives de connexion
+- [ ] Logger les tentatives d'authentification échouées
+- [ ] Utiliser des bibliothèques cryptographiques réputées
+- [ ] Ne jamais réutiliser les sels
+- [ ] Valider la force des mots de passe avant le hachage
+- [ ] Implémenter la rotation des algorithmes si nécessaire
+
+### Migration entre algorithmes
+
+```javascript
+async function migratePassword(oldHash, password, newAlgorithm) {
+    const oldService = detectAlgorithm(oldHash);
+    const newService = new KeyDerivationService(newAlgorithm);
+    
+    if (await oldService.verifyPassword(password, oldHash)) {
+        const newHash = await newService.hashPassword(password);
+        return newHash;
+    }
+    
+    throw new Error('Password verification failed');
+}
+```
+
+## Conclusion
+
+La dérivation de clés est essentielle pour sécuriser les mots de passe. Argon2 est actuellement la meilleure option, offrant une résistance supérieure aux attaques modernes (GPU, ASIC) tout en restant performant. Le choix de l'algorithme et des paramètres doit être adapté aux besoins de sécurité et aux ressources disponibles.
+
+## Références techniques
+
+- [RFC 2898 - PKCS #5: Password-Based Cryptography Specification](https://tools.ietf.org/html/rfc2898)
+- [RFC 9106 - Argon2 Memory-Hard Function](https://tools.ietf.org/html/rfc9106)
+- [NIST SP 800-132 - Recommendation for Password-Based Key Derivation](https://csrc.nist.gov/publications/detail/sp/800-132/final)
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [Password Hashing Competition](https://www.password-hashing.net/)

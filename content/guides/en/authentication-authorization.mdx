@@ -1,0 +1,73 @@
+---
+title: "Authentication and Authorization"
+category: "web-security"
+description: "Guide on authentication and authorization: JWT vs sessions, OAuth 2.0, OIDC, RBAC/ABAC"
+coverImage: "/guides/auth.jpg"
+date: "2024-03-16"
+---
+
+# Authentication and Authorization
+
+Authentication verifies identity, authorization determines permissions. These two concepts are fundamental in security.
+
+## Authentication
+
+### Methods
+
+- **Passwords**: Traditional, requires 2FA
+- **Tokens**: JWT, OAuth tokens
+- **Biometrics**: Fingerprints, facial recognition
+- **Security keys**: FIDO2/WebAuthn
+
+### JWT vs Sessions
+
+**JWT:**
+- Stateless, scalable
+- Client-side storage
+- No easy revocation
+
+**Sessions:**
+- Stateful, requires server storage
+- Easy revocation
+- More secure for sensitive data
+
+## OAuth 2.0
+
+Authorization protocol allowing third-party applications to access user resources.
+
+### Flows
+
+- **Authorization Code**: For server applications
+- **Implicit**: Obsolete
+- **Client Credentials**: For machine-to-machine
+- **Resource Owner Password**: Avoid
+
+## OIDC (OpenID Connect)
+
+OAuth 2.0 extension for authentication. Provides identity information.
+
+## Authorization
+
+### RBAC (Role-Based Access Control)
+
+Permissions based on roles. Simple but less flexible.
+
+### ABAC (Attribute-Based Access Control)
+
+Permissions based on attributes. More flexible and granular.
+
+## Best Practices
+
+- Use 2FA
+- Implement rate limiting
+- Validate all tokens
+- Principle of least privilege
+- Logging and monitoring
+
+## Conclusion
+
+Robust authentication and authorization are essential. Choose the right method according to security and scalability needs.
+
+
+
+

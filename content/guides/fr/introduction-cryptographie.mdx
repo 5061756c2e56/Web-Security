@@ -1,0 +1,340 @@
+---
+title: "Introduction à la cryptographie moderne - Guide complet"
+category: "cryptography"
+description: "Guide expert sur les bases de la cryptographie moderne : cryptographie symétrique et asymétrique, algorithmes (AES, RSA, ECC), modes de chiffrement, gestion des clés, propriétés cryptographiques, applications pratiques et bonnes pratiques."
+coverImage: "/guides/crypto-intro.jpg"
+date: "2024-01-15"
+difficulty: "intermédiaire"
+readingTime: "50 min"
+prerequisites: ["Mathématiques de base", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# Introduction à la cryptographie moderne - Guide complet
+
+La cryptographie est l'art et la science de protéger l'information en la transformant en un format illisible pour ceux qui ne possèdent pas la clé de déchiffrement. Elle constitue le fondement de la sécurité informatique moderne et est utilisée dans pratiquement tous les aspects de la vie numérique.
+
+## Introduction
+
+La cryptographie moderne utilise des algorithmes mathématiques complexes pour garantir quatre propriétés fondamentales :
+
+- **Confidentialité** : Assurer que seules les personnes autorisées peuvent lire les données
+- **Intégrité** : Vérifier que les données n'ont pas été modifiées pendant la transmission ou le stockage
+- **Authentification** : Confirmer l'identité de l'expéditeur ou du système
+- **Non-répudiation** : Empêcher quelqu'un de nier avoir envoyé un message ou effectué une action
+
+## Qu'est-ce que la cryptographie ?
+
+La cryptographie transforme des données en clair (plaintext) en données chiffrées (ciphertext) à l'aide d'un algorithme et d'une clé. Seule la possession de la clé de déchiffrement permet de retrouver les données originales.
+
+### Processus de base
+
+```
+Plaintext → [Algorithme + Clé] → Ciphertext → [Algorithme + Clé] → Plaintext
+```
+
+## Types de cryptographie
+
+### Cryptographie symétrique
+
+Dans la cryptographie symétrique, la même clé secrète est utilisée pour chiffrer et déchiffrer les données.
+
+**Caractéristiques :**
+- Vitesse élevée de chiffrement/déchiffrement
+- Efficace pour les gros volumes de données
+- Nécessite un canal sécurisé pour l'échange de clés
+- Gestion complexe des clés dans un environnement multi-utilisateurs
+
+**Algorithmes courants :**
+- **AES (Advanced Encryption Standard)** : Standard actuel, tailles de clés 128, 192 ou 256 bits
+- **ChaCha20** : Alternative moderne à AES, particulièrement efficace sur les processeurs sans accélération matérielle
+- **Blowfish** : Algorithme plus ancien, maintenant considéré comme obsolète pour de nouveaux projets
+
+**Exemple :**
+```javascript
+const crypto = require('crypto');
+
+const algorithm = 'aes-256-gcm';
+const key = crypto.randomBytes(32);
+const iv = crypto.randomBytes(12);
+
+const cipher = crypto.createCipheriv(algorithm, key, iv);
+const encrypted = Buffer.concat([
+    cipher.update('Hello, World!', 'utf8'),
+    cipher.final()
+]);
+const authTag = cipher.getAuthTag();
+
+const decipher = crypto.createDecipheriv(algorithm, key, iv);
+decipher.setAuthTag(authTag);
+const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final()
+]).toString('utf8');
+```
+
+### Cryptographie asymétrique
+
+La cryptographie asymétrique utilise une paire de clés mathématiquement liées : une clé publique pour chiffrer et une clé privée pour déchiffrer.
+
+**Caractéristiques :**
+- Résout le problème de distribution des clés
+- Permet l'authentification et les signatures numériques
+- Beaucoup plus lent que la cryptographie symétrique
+- Généralement utilisé pour chiffrer de petites quantités de données (comme les clés symétriques)
+
+**Algorithmes courants :**
+- **RSA** : Le plus ancien et le plus répandu, basé sur la factorisation de grands nombres
+- **ECC (Elliptic Curve Cryptography)** : Plus efficace que RSA, clés plus courtes pour le même niveau de sécurité
+- **Ed25519** : Implémentation spécifique d'ECC, très performante et sécurisée
+
+**Exemple :**
+```javascript
+const { generateKeyPairSync, publicEncrypt, privateDecrypt } = require('crypto');
+
+const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+});
+
+const plaintext = 'Hello, World!';
+const encrypted = publicEncrypt(publicKey, Buffer.from(plaintext));
+const decrypted = privateDecrypt(privateKey, encrypted).toString('utf8');
+```
+
+### Cryptographie hybride
+
+Combinaison de cryptographie symétrique et asymétrique.
+
+**Processus :**
+1. Générer une clé symétrique aléatoire
+2. Chiffrer les données avec la clé symétrique (rapide)
+3. Chiffrer la clé symétrique avec la clé publique du destinataire
+4. Envoyer les données chiffrées + la clé symétrique chiffrée
+
+```javascript
+class HybridEncryption {
+    encrypt(plaintext, publicKey) {
+        const symmetricKey = crypto.randomBytes(32);
+        const iv = crypto.randomBytes(12);
+        
+        const cipher = crypto.createCipheriv('aes-256-gcm', symmetricKey, iv);
+        const encrypted = Buffer.concat([
+            cipher.update(plaintext, 'utf8'),
+            cipher.final()
+        ]);
+        const authTag = cipher.getAuthTag();
+        
+        const encryptedKey = crypto.publicEncrypt(publicKey, symmetricKey);
+        
+        return {
+            encrypted: encrypted.toString('hex'),
+            encryptedKey: encryptedKey.toString('hex'),
+            iv: iv.toString('hex'),
+            authTag: authTag.toString('hex')
+        };
+    }
+    
+    decrypt(encryptedData, privateKey) {
+        const symmetricKey = crypto.privateDecrypt(
+            privateKey,
+            Buffer.from(encryptedData.encryptedKey, 'hex')
+        );
+        
+        const iv = Buffer.from(encryptedData.iv, 'hex');
+        const encrypted = Buffer.from(encryptedData.encrypted, 'hex');
+        const authTag = Buffer.from(encryptedData.authTag, 'hex');
+        
+        const decipher = crypto.createDecipheriv('aes-256-gcm', symmetricKey, iv);
+        decipher.setAuthTag(authTag);
+        
+        return Buffer.concat([
+            decipher.update(encrypted),
+            decipher.final()
+        ]).toString('utf8');
+    }
+}
+```
+
+## Modes de chiffrement
+
+Les modes de chiffrement déterminent comment un algorithme de chiffrement par blocs (comme AES) traite les données plus longues qu'un bloc.
+
+### ECB (Electronic Codebook)
+
+**⚠️ À éviter absolument**
+
+Le mode ECB chiffre chaque bloc indépendamment, exposant des patterns dans les données.
+
+```javascript
+// Vulnérable : Patterns visibles
+const cipher = crypto.createCipher('aes-256-ecb', key);
+```
+
+### CBC (Cipher Block Chaining)
+
+Chaque bloc est XORé avec le bloc chiffré précédent avant le chiffrement.
+
+**Caractéristiques :**
+- Nécessite un IV unique et aléatoire
+- Séquentiel (pas de parallélisation)
+- Vulnérable aux attaques de padding oracle
+
+```javascript
+const iv = crypto.randomBytes(16);
+const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+```
+
+### CTR (Counter)
+
+Transforme le chiffrement par blocs en chiffrement de flux.
+
+**Avantages :**
+- Permet le chiffrement parallèle
+- Accès aléatoire aux données
+- Pas de padding nécessaire
+
+```javascript
+const nonce = crypto.randomBytes(12);
+const cipher = crypto.createCipheriv('aes-256-ctr', key, nonce);
+```
+
+### GCM (Galois/Counter Mode)
+
+Mode authentifié qui fournit à la fois confidentialité et intégrité. **Recommandé.**
+
+**Avantages :**
+- Chiffrement et authentification en une seule opération
+- Performant
+- Recommandé pour les nouvelles applications
+
+```javascript
+const iv = crypto.randomBytes(12);
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+cipher.setAAD(additionalData);
+const encrypted = cipher.update(plaintext, 'utf8');
+cipher.final();
+const authTag = cipher.getAuthTag();
+```
+
+## Gestion des clés
+
+La gestion des clés est un aspect critique de la cryptographie :
+
+### Génération
+
+Utiliser des générateurs cryptographiquement sécurisés (CSPRNG).
+
+```javascript
+const key = crypto.randomBytes(32);
+```
+
+### Stockage
+
+Protéger les clés privées avec un chiffrement approprié.
+
+```javascript
+class KeyStorage {
+    async storeKey(keyId, key, masterKey) {
+        const encrypted = await this.encryptKey(key, masterKey);
+        await db.store(keyId, encrypted);
+    }
+    
+    async retrieveKey(keyId, masterKey) {
+        const encrypted = await db.retrieve(keyId);
+        return await this.decryptKey(encrypted, masterKey);
+    }
+}
+```
+
+### Rotation
+
+Changer régulièrement les clés pour limiter l'impact d'une compromission.
+
+```javascript
+class KeyRotation {
+    async rotateKey(keyId) {
+        const oldKey = await this.getKey(keyId);
+        const newKey = crypto.randomBytes(32);
+        
+        await this.reEncryptAllData(oldKey, newKey);
+        await this.updateKey(keyId, newKey);
+    }
+}
+```
+
+### Distribution
+
+Utiliser des canaux sécurisés pour partager les clés.
+
+## Attaques cryptographiques
+
+### Attaques par force brute
+
+Tentative de deviner une clé en essayant toutes les combinaisons possibles.
+
+**Protection :** Utiliser des clés suffisamment longues (minimum 128 bits pour symétrique, 2048 bits pour RSA).
+
+### Attaques par canal auxiliaire (Side-channel)
+
+Exploitation d'informations révélées par l'implémentation physique (temps d'exécution, consommation d'énergie, émissions électromagnétiques).
+
+**Protection :** Utiliser des implémentations résistantes (constant-time, masquage).
+
+### Attaques par cryptanalyse
+
+Analyse mathématique des algorithmes pour trouver des faiblesses.
+
+**Protection :** Utiliser des algorithmes modernes et bien testés.
+
+## Applications pratiques
+
+La cryptographie est utilisée dans de nombreux domaines :
+
+### 1. Communication sécurisée
+
+- HTTPS, VPN, messagerie chiffrée (Signal, WhatsApp)
+
+### 2. Stockage de données
+
+- Chiffrement de disques (BitLocker, FileVault), bases de données chiffrées
+
+### 3. Authentification
+
+- Certificats SSL/TLS, signatures numériques, authentification par clé publique
+
+### 4. Blockchain
+
+- Preuve de travail, signatures de transactions, hachage cryptographique
+
+### 5. Identité numérique
+
+- Passeports électroniques, cartes à puce, authentification biométrique
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Utiliser des algorithmes modernes et bien testés (AES-256, ChaCha20, RSA-2048 minimum, ECC-256)
+- [ ] Toujours utiliser des IV/nonces uniques et aléatoires
+- [ ] Préférer les modes authentifiés (GCM, CCM) pour garantir l'intégrité
+- [ ] Ne jamais réutiliser les clés ou les IV
+- [ ] Utiliser des bibliothèques cryptographiques réputées plutôt que d'implémenter soi-même
+- [ ] Valider et nettoyer toutes les entrées avant le chiffrement
+- [ ] Stocker les clés de manière sécurisée (vaults, HSM)
+- [ ] Implémenter la rotation des clés
+- [ ] Documenter les choix cryptographiques
+- [ ] Tester les implémentations
+- [ ] Former l'équipe sur la cryptographie
+- [ ] Monitorer l'utilisation des clés
+
+## Conclusion
+
+La cryptographie est essentielle pour protéger nos données dans le monde numérique moderne. Comprendre ses principes de base, les algorithmes disponibles, et les bonnes pratiques d'implémentation est crucial pour toute personne travaillant dans la cybersécurité. Les erreurs de mise en œuvre sont souvent plus dangereuses que les faiblesses des algorithmes eux-mêmes.
+
+## Références techniques
+
+- [NIST Cryptographic Standards](https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines)
+- [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
+- [Applied Cryptography - Bruce Schneier](https://www.schneier.com/books/applied-cryptography/)

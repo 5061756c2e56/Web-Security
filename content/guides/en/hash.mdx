@@ -1,0 +1,158 @@
+---
+title: "Cryptographic Hash Functions"
+category: "cryptography"
+description: "Complete guide on hash functions: SHA-256, SHA-512, collisions, rainbow tables, salting and applications"
+coverImage: "/guides/hash.jpg"
+date: "2024-03-02"
+---
+
+# Cryptographic Hash Functions
+
+Hash functions are one-way mathematical functions that transform variable-size data into a fixed-size value (digest). They are fundamental in cryptography and information security.
+
+## Hash Function Properties
+
+### Deterministic
+
+The same input always produces the same output.
+
+### Fast
+
+Hash calculation must be fast for data of any size.
+
+### Irreversible
+
+It must be mathematically impossible to recover the input from the hash.
+
+### Collision Resistant
+
+It must be difficult to find two different inputs producing the same hash.
+
+### Avalanche Effect
+
+A small change in input must produce a completely different hash.
+
+## Hashing Algorithms
+
+### SHA-256
+
+Hash function producing a 256-bit digest (32 bytes). Part of the SHA-2 family.
+
+**Characteristics:**
+- Collision resistant
+- Widely used (Bitcoin, TLS, Git)
+- Performant
+
+**Example:**
+```
+SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+```
+
+### SHA-512
+
+Hash function producing a 512-bit digest (64 bytes). More secure than SHA-256 but slower.
+
+### SHA-3
+
+Modern standard based on Keccak. Different from SHA-2, offers additional security.
+
+### MD5
+
+**Avoid**: Vulnerable to collisions, obsolete for security.
+
+### SHA-1
+
+**Avoid**: Vulnerable to collisions, obsolete for security.
+
+## Applications
+
+### Integrity Verification
+
+Verify that a file has not been modified by comparing its hash before and after transmission.
+
+### Password Storage
+
+Hash passwords before storage. **Important:** Use adaptive functions (bcrypt, Argon2) rather than SHA-256 directly.
+
+### Proof of Work
+
+Used in blockchains (Bitcoin) to validate transactions.
+
+### Hash Tables
+
+Data structure using hashes for fast data access.
+
+## Collisions
+
+### Definition
+
+Two different inputs producing the same hash. Collisions are inevitable (pigeonhole principle) but must be difficult to find.
+
+### Collision Attacks
+
+- **Simple collision**: Find two inputs with the same hash
+- **Second preimage collision**: Find an input producing a given hash
+
+### Protection
+
+Use modern hash functions (SHA-256, SHA-3) with sufficiently long digests.
+
+## Rainbow Tables
+
+### Principle
+
+Precalculated tables of password hashes allowing quick recovery of a password from its hash.
+
+### Protection: Salting
+
+Add a salt (unique random value) to each password before hashing.
+
+**Example:**
+```javascript
+const salt = crypto.randomBytes(16);
+const hash = sha256(password + salt);
+// Store: salt + hash
+```
+
+The salt makes rainbow tables useless because each password has a unique hash even if identical.
+
+## Password Hashing
+
+### Adaptive Functions
+
+Standard hash functions (SHA-256) are too fast for passwords. Use adaptive functions:
+
+- **bcrypt**: Slows down over time (cost factor)
+- **Argon2**: Resistant to GPU/ASIC attacks
+- **scrypt**: Memory-intensive
+- **PBKDF2**: NIST standard, less performant than Argon2
+
+### Example with bcrypt
+
+```javascript
+const bcrypt = require('bcrypt');
+const saltRounds = 12;
+
+// Hashing
+const hash = await bcrypt.hash(password, saltRounds);
+
+// Verification
+const isValid = await bcrypt.compare(password, hash);
+```
+
+## Best Practices
+
+- Use SHA-256 or SHA-512 for data integrity
+- Use adaptive functions (bcrypt, Argon2) for passwords
+- Always salt passwords before hashing
+- Use unique and random salts (minimum 16 bytes)
+- Never use MD5 or SHA-1 for security
+- Regularly check for discovered collisions
+
+## Conclusion
+
+Hash functions are essential in cybersecurity. Their correct use - with modern algorithms and techniques like salting - is crucial to protect data and passwords.
+
+
+
+

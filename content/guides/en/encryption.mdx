@@ -1,0 +1,177 @@
+---
+title: "Data Encryption"
+category: "cryptography"
+description: "Complete guide on encryption: AES-256-GCM, encryption modes, key management, IV/nonces and best practices"
+coverImage: "/guides/encryption.jpg"
+date: "2024-03-03"
+---
+
+# Data Encryption
+
+Encryption is the process of transforming data into an unreadable format without the appropriate decryption key. It guarantees data confidentiality at rest and in transit.
+
+## AES (Advanced Encryption Standard)
+
+AES is the standard symmetric encryption algorithm adopted by NIST in 2001. It replaces DES and 3DES.
+
+### Key Sizes
+
+- **AES-128**: 128-bit key, sufficient security for most cases
+- **AES-192**: 192-bit key, enhanced security
+- **AES-256**: 256-bit key, maximum security level
+
+### Security
+
+AES is considered secure against all known attacks, including brute force attacks. Even with quantum computers, AES-256 remains secure.
+
+## Encryption Modes
+
+### ECB (Electronic Codebook)
+
+**Avoid**: Each block is encrypted independently, exposing patterns in data.
+
+### CBC (Cipher Block Chaining)
+
+Each block is XORed with the previous encrypted block before encryption.
+
+**Characteristics:**
+- Requires a unique and random IV
+- Sequential (no parallelization)
+- Vulnerable to padding oracle attacks
+
+### CTR (Counter)
+
+Transforms block cipher into stream cipher.
+
+**Advantages:**
+- Allows parallel encryption
+- Random access to data
+- No padding required
+
+### GCM (Galois/Counter Mode)
+
+Authenticated mode that provides both confidentiality and integrity.
+
+**Advantages:**
+- Encryption and authentication in a single operation
+- Performant
+- Recommended for new applications
+
+**Usage:**
+```javascript
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+cipher.setAAD(additionalData); // Authenticated but unencrypted data
+const encrypted = cipher.update(plaintext, 'utf8', 'hex');
+cipher.final();
+const authTag = cipher.getAuthTag(); // Authentication tag
+```
+
+## Key Management
+
+### Key Generation
+
+Use cryptographically secure random generators (CSPRNG):
+
+```javascript
+const key = crypto.randomBytes(32); // 256 bits for AES-256
+```
+
+### Key Storage
+
+- **HSM (Hardware Security Module)**: Most secure solution
+- **Key Vaults**: Cloud services (AWS KMS, Azure Key Vault)
+- **Key Encryption**: Encrypt keys with a master key (KEK)
+
+### Key Rotation
+
+Regularly change keys to limit the impact of compromise. Implement automatic rotation strategy.
+
+## IV and Nonces
+
+### Initialization Vector (IV)
+
+Random value used with the key to encrypt data. Must be unique for each operation.
+
+**Rules:**
+- Unique for each encryption with the same key
+- Random and unpredictable
+- Length: 128 bits for AES
+- Can be stored in plaintext with ciphertext
+
+### Nonce (Number used ONCE)
+
+Similar to IV, but can be sequential for some modes (CTR, GCM).
+
+## Encryption at Rest vs in Transit
+
+### Encryption in Transit
+
+Protects data during transmission over the network (HTTPS, TLS).
+
+### Encryption at Rest
+
+Protects data stored on disk or in databases.
+
+**Techniques:**
+- File-level encryption
+- Database-level encryption
+- Disk-level encryption (Full Disk Encryption)
+
+## Best Practices
+
+- Use AES-256-GCM for new applications
+- Generate keys with CSPRNG
+- Use unique and random IVs/nonces
+- Never reuse keys or IVs
+- Store keys securely (HSM, vaults)
+- Implement key rotation
+- Verify authentication tags (GCM)
+- Never store keys in plaintext in code
+
+## Implementation Example
+
+```javascript
+const crypto = require('crypto');
+
+function encrypt(plaintext, key) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    
+    const encrypted = Buffer.concat([
+        cipher.update(plaintext, 'utf8'),
+        cipher.final()
+    ]);
+    
+    const authTag = cipher.getAuthTag();
+    
+    return {
+        iv: iv.toString('hex'),
+        encrypted: encrypted.toString('hex'),
+        authTag: authTag.toString('hex')
+    };
+}
+
+function decrypt(encryptedData, key) {
+    const iv = Buffer.from(encryptedData.iv, 'hex');
+    const encrypted = Buffer.from(encryptedData.encrypted, 'hex');
+    const authTag = Buffer.from(encryptedData.authTag, 'hex');
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    
+    const decrypted = Buffer.concat([
+        decipher.update(encrypted),
+        decipher.final()
+    ]);
+    
+    return decrypted.toString('utf8');
+}
+```
+
+## Conclusion
+
+Encryption is essential to protect data confidentiality. Correct implementation - with modern algorithms (AES-256-GCM), secure key management, and unique IVs - is crucial to guarantee data security.
+
+
+
+

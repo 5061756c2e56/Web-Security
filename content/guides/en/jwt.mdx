@@ -1,0 +1,176 @@
+---
+title: "JSON Web Tokens (JWT)"
+category: "cryptography"
+description: "Complete guide on JWT: structure, algorithms, vulnerabilities and security best practices"
+coverImage: "/guides/jwt.jpg"
+date: "2024-03-01"
+---
+
+# JSON Web Tokens (JWT)
+
+JSON Web Tokens (JWT) are an open standard (RFC 7519) for securely transmitting information between parties as a JSON object. They are widely used for authentication and authorization in modern web applications.
+
+## JWT Structure
+
+A JWT consists of three parts separated by dots (.):
+
+```
+header.payload.signature
+```
+
+### Header
+
+Contains the token type (JWT) and the signature algorithm used.
+
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+
+### Payload
+
+Contains the claims, which are assertions about an entity and additional metadata.
+
+**Claim types:**
+- **Registered claims**: Predefined claims (iss, sub, aud, exp, nbf, iat, jti)
+- **Public claims**: Publicly defined or registered claims in IANA
+- **Private claims**: Custom claims for specific use
+
+```json
+{
+  "sub": "1234567890",
+  "name": "John Doe",
+  "iat": 1516239022,
+  "exp": 1516242622
+}
+```
+
+### Signature
+
+Allows verification that the JWT issuer is who they claim to be and that the message has not been modified.
+
+## Signature Algorithms
+
+### HS256 (HMAC with SHA-256)
+
+Symmetric signature using a shared secret key. The same key is used to sign and verify.
+
+**Advantages:**
+- Simple to implement
+- Performant
+- No need for public/private key management
+
+**Disadvantages:**
+- Requires secure key sharing
+- All services must know the secret key
+
+### RS256 (RSA with SHA-256)
+
+Asymmetric signature using an RSA key pair. Private key signs, public key verifies.
+
+**Advantages:**
+- Only the server has the private key
+- Easy public key distribution
+- More secure for distributed architectures
+
+**Disadvantages:**
+- Slower than HS256
+- Requires more complex key management
+
+### ES256 (ECDSA with P-256 and SHA-256)
+
+Asymmetric signature using elliptic curves. More efficient than RSA.
+
+**Advantages:**
+- Shorter keys than RSA for the same security
+- Better performance than RSA
+- Modern standard
+
+## Common Vulnerabilities
+
+### Algorithm confusion (alg=none)
+
+If the application accepts `"alg": "none"`, an attacker can create a token without a valid signature.
+
+**Protection:** Always verify and explicitly reject the "none" algorithm.
+
+### Weak secret key
+
+If the secret key is weak or predictable, it can be guessed by brute force.
+
+**Protection:** Use strong and random secret keys (minimum 256 bits).
+
+### kid injection
+
+If the `kid` (Key ID) parameter is not properly validated, an attacker can point to a malicious key.
+
+**Protection:** Strictly validate `kid` and use a whitelist of authorized keys.
+
+### Expiration not verified
+
+If `exp` is not checked, expired tokens can be reused.
+
+**Protection:** Always verify `exp` and reject expired tokens.
+
+### Sensitive data in payload
+
+Sensitive data should never be stored in the payload as it is Base64 encoded (not encrypted).
+
+**Protection:** Only store identifiers, never sensitive data.
+
+## Best Practices
+
+### Token Generation
+
+- Use secure algorithms (HS256, RS256, ES256)
+- Set a reasonable expiration (`exp`)
+- Include a unique jti (JWT ID) to prevent reuse
+- Do not store sensitive data in the payload
+
+### Token Validation
+
+- Verify the signature
+- Verify expiration (`exp`)
+- Verify validity date (`nbf` if present)
+- Verify issuer (`iss`)
+- Verify audience (`aud`)
+
+### Client-Side Storage
+
+- **HttpOnly Cookies**: More secure, protected against XSS
+- **localStorage**: Accessible via JavaScript, vulnerable to XSS
+- **sessionStorage**: Similar to localStorage, but limited to session
+
+### Key Rotation
+
+Implement a key rotation strategy to limit the impact of compromise.
+
+## Usage Examples
+
+### Authentication
+
+```javascript
+// Generation
+const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    secretKey,
+    { expiresIn: '1h', algorithm: 'HS256' }
+);
+
+// Verification
+const decoded = jwt.verify(token, secretKey);
+```
+
+### Refresh Tokens
+
+Use long-lived refresh tokens with short-lived access tokens to improve security.
+
+## Conclusion
+
+JWTs are a powerful tool for authentication and authorization, but their security depends entirely on correct implementation. It is essential to understand common vulnerabilities and apply best practices to secure your applications.
+
+
+
+

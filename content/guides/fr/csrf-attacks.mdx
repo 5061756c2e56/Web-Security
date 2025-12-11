@@ -1,0 +1,497 @@
+---
+title: "Attaques CSRF - Guide complet d'exploitation et de protection"
+category: "web-security"
+description: "Guide expert sur les attaques Cross-Site Request Forgery : mécanismes détaillés, types d'attaques (GET, POST, JSON), techniques de protection avancées (tokens, SameSite, double submit), bypass techniques, implémentations complètes et bonnes pratiques."
+coverImage: "/guides/csrf.jpg"
+date: "2024-01-20"
+difficulty: "avancé"
+readingTime: "45 min"
+prerequisites: ["HTTP", "Sessions", "Cookies", "JavaScript"]
+lastUpdated: "2024-12-19"
+---
+
+# Attaques CSRF - Guide complet d'exploitation et de protection
+
+Les attaques CSRF (Cross-Site Request Forgery) sont l'une des vulnérabilités web les plus courantes et dangereuses. Classées dans l'OWASP Top 10, elles peuvent permettre à un attaquant d'effectuer des actions non autorisées au nom d'un utilisateur authentifié.
+
+## Introduction
+
+CSRF exploite la confiance que le serveur accorde au navigateur de l'utilisateur. Quand un utilisateur est authentifié, le navigateur envoie automatiquement les cookies de session avec chaque requête, même si la requête provient d'un site malveillant.
+
+**Impact potentiel :**
+- Modification de données utilisateur
+- Transferts d'argent
+- Changement de mots de passe
+- Suppression de comptes
+- Actions administratives
+
+## Qu'est-ce qu'une attaque CSRF ?
+
+Une attaque CSRF force un utilisateur authentifié à exécuter des actions non désirées sur une application web où il est connecté. L'attaquant exploite le fait que le serveur fait confiance aux requêtes qui incluent les cookies de session valides.
+
+### Principe fondamental
+
+```
+1. Utilisateur authentifié sur SiteA.com
+2. Utilisateur visite SiteB.com (malveillant)
+3. SiteB.com envoie une requête à SiteA.com
+4. Navigateur envoie automatiquement les cookies de SiteA.com
+5. SiteA.com pense que la requête vient de l'utilisateur légitime
+6. Action non autorisée exécutée
+```
+
+## Comment fonctionne une attaque CSRF ?
+
+### Scénario classique
+
+1. L'utilisateur se connecte à un site web (ex: banque en ligne, réseau social)
+2. Le serveur établit une session et envoie un cookie de session au navigateur
+3. Sans se déconnecter, l'utilisateur visite un site malveillant
+4. Le site malveillant contient du code qui envoie une requête au site de la banque
+5. Le navigateur envoie automatiquement le cookie de session avec la requête
+6. La banque pense que la requête vient de l'utilisateur légitime et l'exécute
+
+### Exemple d'attaque basique
+
+```html
+<!-- Site malveillant (attacker.com) -->
+<img src="https://banque.com/transfer?to=attacker&amount=1000" />
+```
+
+Si l'utilisateur est connecté à sa banque, cette image déclenchera un transfert sans son consentement.
+
+### Exemple plus sophistiqué
+
+```html
+<!-- Site malveillant -->
+<form id="csrf-form" action="https://site-vulnerable.com/change-email" method="POST">
+    <input type="hidden" name="email" value="attacker@evil.com">
+</form>
+<script>
+    document.getElementById('csrf-form').submit();
+</script>
+```
+
+## Types d'attaques CSRF
+
+### 1. CSRF GET
+
+Les requêtes GET sont les plus faciles à exploiter car elles peuvent être déclenchées par de simples balises HTML.
+
+#### Vecteurs d'attaque
+
+```html
+<!-- Image -->
+<img src="https://vulnerable.com/delete?id=123" />
+
+<!-- Link -->
+<link rel="stylesheet" href="https://vulnerable.com/action" />
+
+<!-- Iframe -->
+<iframe src="https://vulnerable.com/action"></iframe>
+
+<!-- Script -->
+<script src="https://vulnerable.com/action"></script>
+```
+
+#### Protection
+
+Ne jamais utiliser GET pour des actions modifiant l'état. Utiliser POST, PUT, DELETE.
+
+### 2. CSRF POST
+
+Les requêtes POST nécessitent un formulaire, mais peuvent être soumises automatiquement.
+
+#### Vecteur d'attaque
+
+```html
+<form id="csrf-form" action="https://vulnerable.com/transfer" method="POST">
+    <input type="hidden" name="to" value="attacker">
+    <input type="hidden" name="amount" value="1000">
+</form>
+<script>
+    document.getElementById('csrf-form').submit();
+</script>
+```
+
+#### Protection
+
+Utiliser des tokens CSRF dans tous les formulaires POST.
+
+### 3. CSRF JSON
+
+Les requêtes JSON peuvent être exploitées si l'application accepte les requêtes cross-origin.
+
+#### Vecteur d'attaque
+
+```javascript
+fetch('https://vulnerable.com/api/transfer', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    credentials: 'include',
+    body: JSON.stringify({
+        to: 'attacker',
+        amount: 1000
+    })
+});
+```
+
+#### Protection
+
+Vérifier l'origine des requêtes et utiliser des tokens CSRF même pour JSON.
+
+### 4. CSRF avec Content-Type personnalisé
+
+Certaines applications vérifient le Content-Type mais peuvent être contournées.
+
+```html
+<form enctype="text/plain" action="https://vulnerable.com/api" method="POST">
+    <input name='{"to":"attacker","amount":1000}' value=''>
+</form>
+<script>document.forms[0].submit();</script>
+```
+
+## Techniques de protection
+
+### 1. Tokens CSRF
+
+Générer un token unique, imprévisible et lié à la session pour chaque requête.
+
+#### Implémentation complète
+
+```javascript
+const crypto = require('crypto');
+const express = require('express');
+const session = require('express-session');
+
+class CSRFTokenService {
+    generateToken() {
+        return crypto.randomBytes(32).toString('hex');
+    }
+    
+    storeToken(session, token) {
+        session.csrfToken = token;
+        session.csrfTokenTime = Date.now();
+    }
+    
+    validateToken(session, token) {
+        if (!session.csrfToken) {
+            return false;
+        }
+        
+        if (session.csrfToken !== token) {
+            return false;
+        }
+        
+        const tokenAge = Date.now() - session.csrfTokenTime;
+        if (tokenAge > 3600000) {
+            return false;
+        }
+        
+        return true;
+    }
+}
+
+const csrfService = new CSRFTokenService();
+
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false
+}));
+
+app.use((req, res, next) => {
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = csrfService.generateToken();
+        req.session.csrfTokenTime = Date.now();
+    }
+    res.locals.csrfToken = req.session.csrfToken;
+    next();
+});
+
+app.get('/form', (req, res) => {
+    res.render('form', { csrfToken: res.locals.csrfToken });
+});
+
+app.post('/action', (req, res) => {
+    const token = req.body.csrfToken || req.headers['x-csrf-token'];
+    
+    if (!csrfService.validateToken(req.session, token)) {
+        return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+    
+    req.session.csrfToken = csrfService.generateToken();
+    req.session.csrfTokenTime = Date.now();
+    
+    res.json({ success: true });
+});
+```
+
+#### Double Submit Cookie
+
+```javascript
+app.use((req, res, next) => {
+    if (!req.cookies['XSRF-TOKEN']) {
+        const token = crypto.randomBytes(32).toString('hex');
+        res.cookie('XSRF-TOKEN', token, {
+            httpOnly: false,
+            secure: true,
+            sameSite: 'strict'
+        });
+    }
+    next();
+});
+
+app.post('/action', (req, res) => {
+    const cookieToken = req.cookies['XSRF-TOKEN'];
+    const formToken = req.body.csrfToken || req.headers['x-csrf-token'];
+    
+    if (!cookieToken || cookieToken !== formToken) {
+        return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+    
+    res.json({ success: true });
+});
+```
+
+### 2. SameSite Cookies
+
+L'attribut `SameSite` sur les cookies empêche leur envoi dans les requêtes cross-site.
+
+#### Configuration
+
+```javascript
+res.cookie('session', sessionId, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict'
+});
+```
+
+#### Valeurs
+
+- **`Strict`** : Le cookie n'est jamais envoyé dans les requêtes cross-site
+- **`Lax`** : Le cookie est envoyé pour les requêtes GET cross-site (navigation normale)
+- **`None`** : Le cookie est toujours envoyé (nécessite `Secure`)
+
+### 3. Vérification du Referer/Origin
+
+Vérifier que la requête provient du même domaine.
+
+```javascript
+function validateOrigin(req) {
+    const origin = req.headers.origin;
+    const referer = req.headers.referer;
+    
+    const allowedOrigins = [
+        'https://myapp.com',
+        'https://www.myapp.com'
+    ];
+    
+    if (origin) {
+        return allowedOrigins.includes(origin);
+    }
+    
+    if (referer) {
+        try {
+            const refererUrl = new URL(referer);
+            return allowedOrigins.some(allowed => {
+                const allowedUrl = new URL(allowed);
+                return refererUrl.hostname === allowedUrl.hostname;
+            });
+        } catch (e) {
+            return false;
+        }
+    }
+    
+    return false;
+}
+
+app.use((req, res, next) => {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+        if (!validateOrigin(req)) {
+            return res.status(403).json({ error: 'Invalid origin' });
+        }
+    }
+    next();
+});
+```
+
+### 4. Custom Headers
+
+Utiliser des en-têtes HTTP personnalisés que les navigateurs ne permettent pas de définir via JavaScript cross-origin.
+
+```javascript
+app.use((req, res, next) => {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+        if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
+            return res.status(403).json({ error: 'Missing custom header' });
+        }
+    }
+    next();
+});
+```
+
+### 5. Protection par framework
+
+#### Express.js avec csurf
+
+```javascript
+const csrf = require('csurf');
+const csrfProtection = csrf({ 
+    cookie: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict'
+    }
+});
+
+app.use(csrfProtection);
+
+app.get('/form', (req, res) => {
+    res.render('form', { csrfToken: req.csrfToken() });
+});
+
+app.post('/action', (req, res) => {
+    res.json({ success: true });
+});
+```
+
+#### Django
+
+```python
+from django.views.decorators.csrf import csrf_protect
+from django.middleware.csrf import get_token
+
+@csrf_protect
+def my_view(request):
+    csrf_token = get_token(request)
+    return render(request, 'form.html', {'csrf_token': csrf_token})
+```
+
+#### Spring Security
+
+```java
+@EnableWebSecurity
+public class WebSecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) {
+        http.csrf().csrfTokenRepository(
+            CookieCsrfTokenRepository.withHttpOnlyFalse()
+        );
+        return http.build();
+    }
+}
+```
+
+## Techniques de bypass
+
+### Bypass de la vérification du Referer
+
+Si la vérification est mal implémentée :
+
+```javascript
+// Vulnérable : Vérifie seulement la présence d'une sous-chaîne
+if (referer.includes('myapp.com')) {
+    // Accepte
+}
+
+// Attaque
+// Referer: https://attacker.com/myapp.com/evil
+
+// Protection : Validation stricte
+const allowedDomain = 'myapp.com';
+const refererUrl = new URL(referer);
+if (refererUrl.hostname !== allowedDomain && 
+    !refererUrl.hostname.endsWith('.' + allowedDomain)) {
+    return false;
+}
+```
+
+### Bypass des tokens CSRF
+
+- Token prédictible ou réutilisable
+- Token non lié à la session
+- Validation désactivée pour certaines routes
+- Token dans l'URL (peut être leaké)
+
+### Bypass de SameSite
+
+- Anciens navigateurs
+- `SameSite=None` sans `Secure`
+- Requêtes top-level navigation
+
+## Protection pour les APIs
+
+### Tokens dans les headers
+
+```javascript
+app.post('/api/action', (req, res) => {
+    const token = req.headers['x-csrf-token'];
+    
+    if (!csrfService.validateToken(req.session, token)) {
+        return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+    
+    res.json({ success: true });
+});
+```
+
+### CORS approprié
+
+```javascript
+const cors = require('cors');
+
+app.use(cors({
+    origin: (origin, callback) => {
+        const allowedOrigins = ['https://myapp.com'];
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
+```
+
+## Bonnes pratiques
+
+### Checklist de sécurité
+
+- [ ] Toujours utiliser des tokens CSRF pour les actions sensibles (POST, PUT, DELETE)
+- [ ] Implémenter plusieurs couches de protection (défense en profondeur)
+- [ ] Utiliser `SameSite=Strict` pour les cookies de session
+- [ ] Vérifier l'origine des requêtes pour les API
+- [ ] Ne jamais utiliser GET pour des actions modifiant l'état
+- [ ] Régénérer les tokens après utilisation
+- [ ] Valider les tokens avec expiration
+- [ ] Logger les tentatives CSRF échouées
+- [ ] Tester régulièrement avec des outils comme OWASP ZAP
+- [ ] Former les développeurs aux risques CSRF
+- [ ] Documenter les mécanismes de protection
+- [ ] Implémenter la protection sur toutes les routes sensibles
+- [ ] Utiliser des bibliothèques réputées
+- [ ] Monitorer les tentatives d'attaque
+
+## Cas d'étude réels
+
+### Attaque sur un réseau social (2018)
+
+Une vulnérabilité CSRF a permis à des attaquants de modifier les paramètres de confidentialité de millions d'utilisateurs sans leur consentement.
+
+### Attaque bancaire
+
+Des attaquants ont exploité une faille CSRF pour effectuer des virements non autorisés en utilisant des images cachées sur des sites web populaires.
+
+## Conclusion
+
+Les attaques CSRF peuvent avoir des conséquences graves. Il est essentiel d'implémenter des protections appropriées dès le développement. La combinaison de plusieurs techniques (tokens CSRF + SameSite cookies + vérification d'origine) offre une protection robuste contre ces attaques.
+
+## Références techniques
+
+- [OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+- [RFC 6265 - HTTP State Management Mechanism](https://tools.ietf.org/html/rfc6265)
+- [SameSite Cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite)
