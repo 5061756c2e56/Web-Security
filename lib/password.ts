@@ -13,7 +13,7 @@ export interface PasswordOptions {
 
 export function generatePassword(options: PasswordOptions): string {
     let charset = '';
-    
+
     if (options.includeLowercase) charset += LOWERCASE;
     if (options.includeUppercase) charset += UPPERCASE;
     if (options.includeNumbers) charset += NUMBERS;
@@ -25,7 +25,7 @@ export function generatePassword(options: PasswordOptions): string {
 
     const array = new Uint8Array(options.length);
     crypto.getRandomValues(array);
-    
+
     let password = '';
     for (let i = 0; i < options.length; i++) {
         password += charset[array[i] % charset.length];
@@ -36,7 +36,7 @@ export function generatePassword(options: PasswordOptions): string {
 
 export function calculateEntropy(password: string): number {
     let charsetSize = 0;
-    
+
     if (/[a-z]/.test(password)) charsetSize += 26;
     if (/[A-Z]/.test(password)) charsetSize += 26;
     if (/[0-9]/.test(password)) charsetSize += 10;
@@ -45,9 +45,4 @@ export function calculateEntropy(password: string): number {
     if (charsetSize === 0) return 0;
 
     return password.length * Math.log2(charsetSize);
-}
-
-export async function testPasswordWithZxcvbn(password: string) {
-    const zxcvbn = (await import('zxcvbn')).default;
-    return zxcvbn(password);
 }
