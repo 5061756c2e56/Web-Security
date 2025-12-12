@@ -51,21 +51,21 @@ const nextConfig: NextConfig = {
                     {
                         key: 'Content-Security-Policy',
                         value: [
-                            "default-src 'self'",
-                            "script-src 'self'",
-                            "script-src-elem 'self' 'unsafe-inline'",
-                            "worker-src 'self' blob:",
-                            "style-src 'self' 'unsafe-inline'",
-                            "img-src 'self' data: blob:",
-                            "font-src 'self' data:",
-                            "connect-src 'self'",
-                            "frame-src 'none'",
-                            "object-src 'none'",
-                            "base-uri 'self'",
-                            "form-action 'self'",
-                            "frame-ancestors 'none'",
-                            "upgrade-insecure-requests",
-                            "block-all-mixed-content"
+                            'default-src \'self\'',
+                            'script-src \'self\' \'unsafe-eval\'',
+                            'script-src-elem \'self\' \'unsafe-inline\'',
+                            'worker-src \'self\' blob:',
+                            'style-src \'self\' \'unsafe-inline\'',
+                            'img-src \'self\' data: blob:',
+                            'font-src \'self\' data:',
+                            'connect-src \'self\'',
+                            'frame-src \'none\'',
+                            'object-src \'none\'',
+                            'base-uri \'self\'',
+                            'form-action \'self\'',
+                            'frame-ancestors \'none\'',
+                            'upgrade-insecure-requests',
+                            'block-all-mixed-content'
                         ].join('; ')
                     },
                     {
