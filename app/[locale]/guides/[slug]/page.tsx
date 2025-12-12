@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Calendar } from 'lucide-react';
 import { getSiteUrl } from '@/lib/url';
 import { getTranslations } from 'next-intl/server';
+import { GuidePageClient } from '@/components/GuidePageClient';
 
 interface GuidePageProps {
     params: Promise<{ locale: string; slug: string }>;
@@ -85,66 +86,16 @@ export default async function GuidePage({ params }: GuidePageProps) {
     };
 
     return (
-        <div className="relative">
-            <aside className="hidden lg:block fixed left-8 top-1/2 -translate-y-1/2 z-10">
-                <TableOfContentsClient />
-            </aside>
-            
-            <div className="max-w-4xl mx-auto space-y-8 lg:ml-[28rem]">
-                <article className="space-y-8">
-                    <header className="space-y-4">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="px-2 py-1 bg-muted rounded">
-                                {categoryLabels[guide.category] || guide.category}
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {new Date(guide.date).toLocaleDateString(locale, {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                })}
-                            </span>
-                        </div>
-                        
-                        <h1 className="text-4xl md:text-5xl font-bold">{guide.title}</h1>
-                        <p className="text-xl text-muted-foreground">{guide.description}</p>
-                        
-                        {guide.coverImage && (
-                            <GuideCoverImage
-                                src={guide.coverImage}
-                                alt={guide.title}
-                            />
-                        )}
-                    </header>
-
-                    <div className="prose prose-lg dark:prose-invert max-w-none">
-                        <MDXContentClient source={mdxSource} />
-                    </div>
-                </article>
-
-                {(previousGuide || nextGuide) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-8 border-t">
-                        {previousGuide && (
-                            <Link href={`/guides/${previousGuide.slug}`}>
-                                <Card className="p-4 hover:border-primary/50 transition-all cursor-pointer">
-                                    <div className="text-sm text-muted-foreground mb-1">{t('previousGuide')}</div>
-                                    <div className="font-semibold">{previousGuide.title}</div>
-                                </Card>
-                            </Link>
-                        )}
-                        {nextGuide && (
-                            <Link href={`/guides/${nextGuide.slug}`} className={previousGuide ? '' : 'md:col-start-2'}>
-                                <Card className="p-4 hover:border-primary/50 transition-all cursor-pointer">
-                                    <div className="text-sm text-muted-foreground mb-1">{t('nextGuide')}</div>
-                                    <div className="font-semibold">{nextGuide.title}</div>
-                                </Card>
-                            </Link>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
+        <GuidePageClient
+            guide={guide}
+            mdxSource={mdxSource}
+            locale={locale}
+            categoryLabels={categoryLabels}
+            previousGuide={previousGuide}
+            nextGuide={nextGuide}
+            previousGuideLabel={t('previousGuide')}
+            nextGuideLabel={t('nextGuide')}
+        />
     );
 }
 

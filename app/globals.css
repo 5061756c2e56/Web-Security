@@ -650,6 +650,59 @@ html {
         -webkit-text-fill-color: transparent;
         color: transparent;
     }
+
+    .code-block-wrapper {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+    }
+
+    .code-block-wrapper::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+    }
+
+    .code-block-wrapper::-webkit-scrollbar-track {
+        background: transparent;
+        border-radius: 4px;
+    }
+
+    .code-block-wrapper::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    }
+
+    .code-block-wrapper::-webkit-scrollbar-thumb:hover {
+        background: var(--muted-foreground);
+        opacity: 0.6;
+    }
+
+    .code-block-container .code-block-wrapper::-webkit-scrollbar-thumb {
+        background: linear-gradient(to right, var(--gradient-start), var(--gradient-end));
+        opacity: 0.5;
+    }
+
+    .code-block-container .code-block-wrapper::-webkit-scrollbar-thumb:hover {
+        opacity: 0.8;
+    }
+
+    .dark .code-block-wrapper::-webkit-scrollbar-thumb {
+        background: var(--muted-foreground);
+        opacity: 0.4;
+    }
+
+    .dark .code-block-wrapper::-webkit-scrollbar-thumb:hover {
+        opacity: 0.7;
+    }
+
+    .dark .code-block-container .code-block-wrapper::-webkit-scrollbar-thumb {
+        background: linear-gradient(to right, var(--gradient-start), var(--gradient-end));
+        opacity: 0.6;
+    }
+
+    .dark .code-block-container .code-block-wrapper::-webkit-scrollbar-thumb:hover {
+        opacity: 0.9;
+    }
 }
 
 @layer base {
@@ -688,6 +741,7 @@ html {
     body {
         @apply bg-background text-foreground;
     }
+    
     
     /* Cursor pointer for all clickable elements */
     a,

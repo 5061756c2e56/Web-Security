@@ -6,7 +6,6 @@ import {
     Lock, Menu, QrCode, Shield, ShieldCheck, X
 } from 'lucide-react';
 
-import { BookIcon } from '@/components/BookIcon';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Settings } from '@/components/Settings';
@@ -151,7 +150,6 @@ export function DashboardNav() {
     };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-    const isGuidesActive = pathname.startsWith('/guides');
 
     const handleBack = () => {
         router.back();
@@ -194,18 +192,6 @@ export function DashboardNav() {
 
                             <div
                                 className="hidden md:flex items-center gap-1 sm:gap-2 flex-1 justify-end min-w-0 overflow-visible">
-                                <Link
-                                    href="/guides"
-                                    className={cn(
-                                        'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-md text-sm transition-all shrink-0 whitespace-nowrap',
-                                        isGuidesActive
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'hover:bg-accent'
-                                    )}
-                                >
-                                    <BookIcon size={16} className="shrink-0"/>
-                                    <span className="hidden lg:inline">{t('guides')}</span>
-                                </Link>
                                 {categories.map((category) => {
                                     const CategoryIcon = category.icon;
                                     const categoryLabel = t(category.labelKey);
@@ -316,22 +302,6 @@ export function DashboardNav() {
                     <div
                         className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-card border-r border-border z-[99] md:hidden overflow-y-auto">
                         <div className="p-4 space-y-2">
-                            <Link
-                                href="/guides"
-                                onClick={() => {
-                                    setMobileMenuOpen(false);
-                                    setMobileOpenCategories(new Set());
-                                }}
-                                className={cn(
-                                    'flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-all',
-                                    isGuidesActive
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'text-foreground hover:bg-accent'
-                                )}
-                            >
-                                <BookIcon size={20} className="shrink-0"/>
-                                <span className="font-medium">{t('guides')}</span>
-                            </Link>
                             {categories.map((category) => {
                                 const CategoryIcon = category.icon;
                                 const categoryLabel = t(category.labelKey);

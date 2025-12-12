@@ -6,13 +6,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import {
     BarChart3, Code, Dice6, FileLock, FileText, Fingerprint, Hash, Key, KeyRound, Lock, QrCode, Search, ShieldCheck,
-    Wrench
+    Wrench, CheckCircle, Network
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
-import { type GuideMetadata } from '@/lib/guides';
 import { BookIcon } from '@/components/BookIcon';
 import { GlossaryIcon } from '@/components/GlossaryIcon';
+import { type GuideMetadata } from '@/lib/guides';
+
+const categoryIcons: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
+    cryptography: Lock,
+    'web-security': ShieldCheck,
+    networks: Network,
+    definitions: GlossaryIcon,
+    'best-practices': CheckCircle
+};
 
 const features = [
     {
@@ -95,20 +103,12 @@ const features = [
     }
 ];
 
-const categoryIcons: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
-    cryptography: Lock,
-    'web-security': ShieldCheck,
-    networks: FileText,
-    definitions: GlossaryIcon,
-    'best-practices': FileLock
-};
-
 export default function Home() {
     const t = useTranslations();
     const locale = useLocale();
     const [activeTab, setActiveTab] = useState('tools');
-    const [guides, setGuides] = useState<GuideMetadata[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [allGuides, setAllGuides] = useState<GuideMetadata[]>([]);
 
     useEffect(() => {
         const loadGuides = async () => {
@@ -116,7 +116,7 @@ export default function Home() {
                 const response = await fetch(`/api/guides?locale=${locale}`);
                 if (response.ok) {
                     const loadedGuides = await response.json();
-                    setGuides(loadedGuides);
+                    setAllGuides(loadedGuides);
                 }
             } catch (error) {
                 console.error('Error loading guides:', error);
@@ -135,15 +135,23 @@ export default function Home() {
         });
     }, [searchQuery, t]);
 
-    const filteredGuides = useMemo(() => {
-        if (!searchQuery.trim()) return guides;
-        const query = searchQuery.toLowerCase();
-        return guides.filter(guide => {
-            const title = guide.title.toLowerCase();
-            const description = guide.description.toLowerCase();
-            return title.includes(query) || description.includes(query);
-        });
-    }, [searchQuery, guides]);
+    const guidesByCategory = useMemo(() => (
+        {
+            cryptography: allGuides.filter(g => g.category === 'cryptography'),
+            'web-security': allGuides.filter(g => g.category === 'web-security'),
+            networks: allGuides.filter(g => g.category === 'networks'),
+            definitions: allGuides.filter(g => g.category === 'definitions'),
+            'best-practices': allGuides.filter(g => g.category === 'best-practices')
+        }
+    ), [allGuides]);
+
+    const categoryLabels: Record<string, string> = {
+        cryptography: t('guideCategoryCryptography'),
+        'web-security': t('guideCategoryWebSecurity'),
+        networks: t('guideCategoryNetworks'),
+        definitions: t('guideCategoryDefinitions'),
+        'best-practices': t('guideCategoryBestPractices')
+    };
 
     return (
         <>
@@ -207,49 +215,37 @@ export default function Home() {
                 </TabsContent>
 
                 <TabsContent value="guides">
-                    {filteredGuides.length === 0 ? (
-                        <div className="text-center py-12">
-                            {guides.length === 0 ? (
-                                <>
-                                    <BookIcon size={48} className="mx-auto mb-4 text-muted-foreground"/>
-                                    <p className="text-muted-foreground">{t('noGuidesAvailable')}</p>
-                                </>
-                            ) : (
-                                <>
-                                    <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground"/>
-                                    <p className="text-muted-foreground">{t('noResultsFound')}</p>
-                                </>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {filteredGuides.map((guide) => {
-                                const CategoryIcon = categoryIcons[guide.category] || BookIcon;
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {Object.entries(guidesByCategory).map(([cat, catGuides]) => {
+                                const CategoryIcon = categoryIcons[cat] || BookIcon;
                                 return (
                                     <Link
-                                        key={guide.slug}
-                                        href={`/guides/${guide.slug}`}
-                                        className="cursor-pointer"
+                                        key={cat}
+                                        href={`/guides?category=${cat}`}
+                                        className="cursor-pointer h-full"
                                     >
                                         <Card
-                                            className="hover:border-primary/50 transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5 active:translate-y-0">
-                                            <CardHeader>
+                                            className="h-full flex flex-col hover:border-primary/50 transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5 active:translate-y-0">
+                                            <CardHeader className="flex-1">
                                                 <div className="flex items-center gap-3">
-                                                    {guide.category === 'definitions' ? (
+                                                    {cat === 'definitions' ? (
                                                         <GlossaryIcon size={20} className="text-primary"/>
                                                     ) : (
                                                         <CategoryIcon className="w-5 h-5 text-primary"/>
                                                     )}
-                                                    <CardTitle className="text-lg">{guide.title}</CardTitle>
+                                                    <CardTitle className="text-lg">
+                                                        {categoryLabels[cat]}
+                                                    </CardTitle>
                                                 </div>
-                                                <CardDescription>{guide.description}</CardDescription>
+                                                <CardDescription>
+                                                    {catGuides.length} guide{catGuides.length > 1 ? 's' : ''}
+                                                </CardDescription>
                                             </CardHeader>
                                         </Card>
                                     </Link>
                                 );
                             })}
-                        </div>
-                    )}
+                    </div>
                 </TabsContent>
             </Tabs>
         </>

@@ -69,7 +69,7 @@ export function getSessionCookieName(): string {
 export function getSessionCookieOptions(isProduction: boolean) {
     return {
         httpOnly: true,
-        secure: isProduction,
+        secure: true,
         sameSite: 'strict' as const,
         maxAge: SESSION_DURATION / 1000,
         path: '/'

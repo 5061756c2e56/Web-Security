@@ -67,9 +67,9 @@ const CodeBlock = ({ children, className, ...props }: React.HTMLAttributes<HTMLE
     
     if (language) {
         return (
-            <div className="my-4 rounded-lg border border-border overflow-hidden bg-card shadow-sm">
+            <div className="my-4 rounded-lg border border-border bg-card shadow-sm code-block-container">
                 {mounted ? (
-                    <div className="relative">
+                    <div className="relative code-block-wrapper overflow-x-auto">
                         <SyntaxHighlighter
                             language={language}
                             // @ts-expect-error - react-syntax-highlighter types are incorrect, oneDark/oneLight are valid style objects
@@ -96,8 +96,8 @@ const CodeBlock = ({ children, className, ...props }: React.HTMLAttributes<HTMLE
                         </SyntaxHighlighter>
                     </div>
                 ) : (
-                    <div className="p-4">
-                        <pre className="text-sm font-mono overflow-x-auto m-0 text-foreground">
+                    <div className="p-4 code-block-wrapper overflow-x-auto">
+                        <pre className="text-sm font-mono m-0 text-foreground">
                             <code>{codeString}</code>
                         </pre>
                     </div>
@@ -127,7 +127,7 @@ const PreBlock = ({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) 
     }
     
     return (
-        <pre className="bg-muted p-4 rounded-lg overflow-x-auto mb-4" {...props}>
+        <pre className="bg-muted p-4 rounded-lg overflow-x-auto mb-4 code-block-wrapper" {...props}>
             {children}
         </pre>
     );
@@ -184,7 +184,7 @@ const components = {
     a: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
         <a
             href={href}
-            className="text-primary hover:underline"
+            className="gradient-text hover:underline transition-opacity hover:opacity-80"
             target={href?.startsWith('http') ? '_blank' : undefined}
             rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
             {...props}

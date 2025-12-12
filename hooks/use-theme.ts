@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 type Theme = 'light' | 'dark' | 'system';
 
 export function useTheme() {
-    const [theme, setTheme] = useState<Theme>('light');
+    const [theme, setTheme] = useState<Theme>('system');
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -14,7 +14,7 @@ export function useTheme() {
         if (stored) {
             setTheme(stored);
         } else {
-            setTheme('light');
+            setTheme('system');
         }
     }, []);
 

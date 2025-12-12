@@ -27,7 +27,7 @@ export default function Footer() {
                             href="https://github.com/5061756c2e56/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-110 hover:rotate-3 cursor-pointer"
+                            className="transition-all duration-300 hover:scale-110 hover:rotate-3 cursor-pointer"
                             aria-label={tNav('github')}
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -39,7 +39,7 @@ export default function Footer() {
                             href="https://www.linkedin.com/in/paul-viandier-648837397/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-110 hover:rotate-3 cursor-pointer"
+                            className="transition-all duration-300 hover:scale-110 hover:rotate-3 cursor-pointer"
                             aria-label={tNav('linkedin')}
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

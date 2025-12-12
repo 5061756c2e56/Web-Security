@@ -281,6 +281,19 @@
   "addSpecialChars": "Ajoutez des caractères spéciaux",
   "noPatternDetected": "Aucun pattern détecté",
   "strongPassword": "Mot de passe solide",
+  "errors": {
+    "404": {
+      "title": "Page introuvable",
+      "description": "La page que vous recherchez n'existe pas ou a été déplacée.",
+      "backHome": "Retour à l'accueil"
+    },
+    "500": {
+      "title": "Une erreur est survenue",
+      "description": "Désolé, une erreur inattendue s'est produite. Veuillez réessayer.",
+      "retry": "Réessayer",
+      "backHome": "Retour à l'accueil"
+    }
+  },
   "errorTitle": "500",
   "errorHeading": "Erreur critique",
   "errorMessage": "Une erreur critique s'est produite. Veuillez recharger la page.",
@@ -320,7 +333,6 @@
   "backToGuides": "Retour aux guides",
   "previousGuide": "Précédent",
   "nextGuide": "Suivant",
-  "guidesDescription": "Guides complets sur la cybersécurité, l'informatique et les définitions",
   "back": "Retour",
   "searchPlaceholder": "Rechercher...",
   "noResultsFound": "Aucun résultat trouvé",

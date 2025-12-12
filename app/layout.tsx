@@ -1,7 +1,4 @@
-import {
-    Geist,
-    Geist_Mono
-} from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import type { Metadata } from 'next';
 import './globals.css';
 import StructuredData from '@/components/StructuredData';
@@ -79,17 +76,10 @@ export const metadata: Metadata = {
         description: 'Web Security, dashboard de sécurité professionnel avec outils de cryptographie, chiffrement, hash, JWT, QR codes et plus. Découvrez Web Security, votre plateforme complète de sécurité web et cryptographie.',
         images: [
             {
-                url: `${baseUrl}/opengraph-image`,
+                url: `${baseUrl}/vPsl6pa.png`,
                 width: 1200,
                 height: 630,
                 alt: 'Web Security - Security Dashboard | Outils de Cryptographie Professionnels',
-                type: 'image/png'
-            },
-            {
-                url: `${baseUrl}/pfp.png`,
-                width: 512,
-                height: 512,
-                alt: 'Web Security Dashboard',
                 type: 'image/png'
             }
         ]
@@ -99,18 +89,17 @@ export const metadata: Metadata = {
         title: 'Web Security - Security Dashboard | Outils de Cryptographie Professionnels',
         description: 'Web Security, dashboard de sécurité professionnel avec outils de cryptographie, chiffrement, hash, JWT, QR codes et plus. Découvrez Web Security, votre plateforme complète de sécurité web.',
         images: [
-            `${baseUrl}/opengraph-image`,
-            `${baseUrl}/pfp.png`
+            `${baseUrl}/vPsl6pa.png`
         ],
-        creator: '@securitydashboard'
+        creator: '@PaulViandier'
     },
     alternates: {
         canonical: baseUrl,
-            languages: {
-                'fr': baseUrl,
-                'en': `${baseUrl}/en`,
-                'x-default': baseUrl
-            }
+        languages: {
+            'fr': baseUrl,
+            'en': `${baseUrl}/en`,
+            'x-default': baseUrl
+        }
     },
     verification: {
         google: process.env.GOOGLE_VERIFICATION,
@@ -130,16 +119,23 @@ export default function RootLayout({
 }: {
     children: React.ReactNode;
 }) {
+    const christmasMode = process.env.NEXT_PUBLIC_CHRISTMAS_MODE === 'true';
+
     return (
         <html suppressHydrationWarning>
-            <head>
-                <script
-                    dangerouslySetInnerHTML={{
-                        __html: `
+        <head>
+            <script
+                dangerouslySetInnerHTML={{
+                    __html: `
                             (function() {
                                 try {
+                                    const pathname = window.location.pathname;
+                                    const locale = pathname.startsWith('/en') ? 'en' : 'fr';
+                                    document.documentElement.lang = locale;
+                                    document.documentElement.setAttribute('data-locale', locale);
+                                    
                                     const storedTheme = localStorage.getItem('theme');
-                                    let theme = storedTheme || 'light';
+                                    let theme = storedTheme || 'system';
                                     let effectiveTheme = theme;
                                     
                                     if (theme === 'system') {
@@ -156,8 +152,10 @@ export default function RootLayout({
                                         document.documentElement.style.color = '#000000';
                                     }
                                     
-                                    window.__CHRISTMAS_MODE__ = ${process.env.NEXT_PUBLIC_CHRISTMAS_MODE === 'true' ? 'true' : 'false'};
+                                    window.__CHRISTMAS_MODE__ = ${christmasMode};
                                 } catch (e) {
+                                    document.documentElement.lang = 'fr';
+                                    document.documentElement.setAttribute('data-locale', 'fr');
                                     document.documentElement.classList.add('light');
                                     document.documentElement.style.backgroundColor = '#ffffff';
                                     document.documentElement.style.color = '#000000';
@@ -165,11 +163,11 @@ export default function RootLayout({
                                 }
                             })();
                         `
-                    }}
-                />
-                <style
-                    dangerouslySetInnerHTML={{
-                        __html: `
+                }}
+            />
+            <style
+                dangerouslySetInnerHTML={{
+                    __html: `
                             html:not(.dark):not(.light) {
                                 background-color: #000000 !important;
                                 color: #ffffff !important;
@@ -188,20 +186,20 @@ export default function RootLayout({
                                 color: #000000 !important;
                             }
                         `
-                    }}
-                />
-            </head>
-            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
-                <script
-                    dangerouslySetInnerHTML={{
-                        __html: `
+                }}
+            />
+        </head>
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
+        <script
+            dangerouslySetInnerHTML={{
+                __html: `
                             document.body.style.visibility = 'visible';
                         `
-                    }}
-                />
-                <StructuredData />
-                {children}
-            </body>
+            }}
+        />
+        <StructuredData/>
+        {children}
+        </body>
         </html>
     );
 }

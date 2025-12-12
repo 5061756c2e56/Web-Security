@@ -46,3 +46,8 @@ export function calculateEntropy(password: string): number {
 
     return password.length * Math.log2(charsetSize);
 }
+
+export async function testPasswordWithZxcvbn(password: string) {
+    const zxcvbn = (await import('zxcvbn')).default;
+    return zxcvbn(password);
+}

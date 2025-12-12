@@ -79,7 +79,7 @@ function GuidesPageContent() {
     if (category && categoryGuides.length > 0) {
         const CategoryIcon = categoryIcons[category] || BookIcon;
         return (
-            <div className="space-y-8 pt-20">
+            <div className="space-y-8">
                 <div>
                     <div className="flex items-center gap-3 mb-4">
                         {category === 'definitions' ? (
@@ -109,11 +109,11 @@ function GuidesPageContent() {
                             <Link
                                 key={guide.slug}
                                 href={`/guides/${guide.slug}`}
-                                className="cursor-pointer"
+                                className="cursor-pointer h-full"
                             >
                                 <Card
-                                    className="hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5">
-                                    <CardHeader>
+                                    className="h-full flex flex-col hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5">
+                                    <CardHeader className="flex-1">
                                         <div className="flex items-center gap-3">
                                             {guide.category === 'definitions' ? (
                                                 <GlossaryIcon size={20} className="text-primary"/>
@@ -134,26 +134,18 @@ function GuidesPageContent() {
     }
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h1 className="text-4xl font-bold mb-2">{t('guides')}</h1>
-                <p className="text-muted-foreground">
-                    {t('guidesDescription')}
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Object.entries(guidesByCategory).map(([cat, catGuides]) => {
                     const CategoryIcon = categoryIcons[cat] || BookIcon;
                     return (
                         <Link
                             key={cat}
                             href={`/guides?category=${cat}`}
-                            className="cursor-pointer"
+                            className="cursor-pointer h-full"
                         >
                             <Card
-                                className="hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5">
-                                <CardHeader>
+                                className="h-full flex flex-col hover:border-primary/50 transition-all duration-200 cursor-pointer hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-0.5">
+                                <CardHeader className="flex-1">
                                     <div className="flex items-center gap-3">
                                         {cat === 'definitions' ? (
                                             <GlossaryIcon size={20} className="text-primary"/>
@@ -172,7 +164,6 @@ function GuidesPageContent() {
                         </Link>
                     );
                 })}
-            </div>
         </div>
     );
 }

@@ -1,13 +1,25 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Link } from '@/i18n/routing';
 import { useTranslations } from 'next-intl';
 import { useTheme } from '@/hooks/use-theme';
-import { useEffect } from 'react';
 
-export default function NotFound() {
-    const t = useTranslations('errors.404');
+export default function Error({
+    error,
+    reset
+}: {
+    error: Error & { digest?: string };
+    reset: () => void;
+}) {
+    const t = useTranslations('errors.500');
     const { theme, mounted } = useTheme();
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error(error);
+        }
+    }, [error]);
 
     useEffect(() => {
         if (mounted) {
@@ -30,7 +42,7 @@ export default function NotFound() {
             <div className="max-w-2xl mx-auto text-center relative z-10 space-y-6">
                 <div className="animate-fade-in-up">
                     <h1 className="text-9xl sm:text-[12rem] font-bold mb-4 bg-gradient-to-r from-[#f0877d] to-[#7da8f0] bg-clip-text text-transparent">
-                        404
+                        500
                     </h1>
                 </div>
                 <div className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -44,6 +56,22 @@ export default function NotFound() {
                     </p>
                 </div>
                 <div className="animate-fade-in-up flex flex-col sm:flex-row items-center justify-center gap-4" style={{ animationDelay: '0.3s' }}>
+                    <button
+                        onClick={reset}
+                        className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border-2 border-border bg-background/80 backdrop-blur-sm hover:bg-muted hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 cursor-pointer group font-medium text-base"
+                    >
+                        <span className="text-foreground group-hover:text-primary transition-colors duration-300">{t('retry')}</span>
+                        <svg
+                            className="w-5 h-5 text-foreground group-hover:text-primary group-hover:rotate-180 transition-all duration-300"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2.5}
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round"
+                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
                     <Link
                         href="/"
                         className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border-2 border-border bg-background/80 backdrop-blur-sm hover:bg-muted hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 cursor-pointer group font-medium text-base"

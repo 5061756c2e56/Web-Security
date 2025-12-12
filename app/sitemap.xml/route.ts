@@ -18,6 +18,15 @@ const routes = [
     '/csrf',
     '/uuid',
     '/entropy',
+    '/http-headers',
+    '/csp-generator',
+    '/password-tester',
+    '/crypto-visualizer',
+    '/signed-qrcode',
+    '/regex',
+    '/openapi',
+    '/webhook',
+    '/json-schema',
     '/guides'
 ];
 

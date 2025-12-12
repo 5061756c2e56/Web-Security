@@ -15,51 +15,64 @@ interface Heading {
 
 interface TableOfContentsProps {
     className?: string;
+    isContentReady?: boolean;
+    guideTitle?: string;
 }
 
-export function TableOfContents({ className }: TableOfContentsProps) {
+export function TableOfContents({ className, isContentReady = false, guideTitle }: TableOfContentsProps) {
     const t = useTranslations();
     const [headings, setHeadings] = useState<Heading[]>([]);
     const [activeId, setActiveId] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
-        const headingElements = document.querySelectorAll('h2, h3, h4');
-        const extractedHeadings: Heading[] = [];
-        const idCounts = new Map<string, number>();
+        if (!isContentReady) {
+            return;
+        }
 
-        headingElements.forEach((element) => {
-            let id = element.id;
-            const text = element.textContent || '';
-            const level = parseInt(element.tagName.charAt(1));
+        const extractHeadings = () => {
+            const headingElements = document.querySelectorAll('h2, h3, h4');
+            const extractedHeadings: Heading[] = [];
+            const idCounts = new Map<string, number>();
 
-            if (!id && text) {
-                id = text
-                    .toString()
-                    .toLowerCase()
-                    .trim()
-                    .replace(/\s+/g, '-')
-                    .replace(/[^\w\-]+/g, '')
-                    .replace(/\-\-+/g, '-')
-                    .replace(/^-+/, '')
-                    .replace(/-+$/, '');
-            }
+            headingElements.forEach((element) => {
+                let id = element.id;
+                const text = element.textContent || '';
+                const level = parseInt(element.tagName.charAt(1));
 
-            if (id && text) {
-                const count = idCounts.get(id) || 0;
-                idCounts.set(id, count + 1);
-                
-                const uniqueId = count > 0 ? `${id}-${count}` : id;
-                if (uniqueId !== element.id) {
-                    element.id = uniqueId;
+                if (!id && text) {
+                    id = text
+                        .toString()
+                        .toLowerCase()
+                        .trim()
+                        .replace(/\s+/g, '-')
+                        .replace(/[^\w\-]+/g, '')
+                        .replace(/\-\-+/g, '-')
+                        .replace(/^-+/, '')
+                        .replace(/-+$/, '');
                 }
-                
-                extractedHeadings.push({ id: uniqueId, text, level });
-            }
-        });
 
-        setHeadings(extractedHeadings);
-    }, []);
+                if (id && text) {
+                    const count = idCounts.get(id) || 0;
+                    idCounts.set(id, count + 1);
+                    
+                    const uniqueId = count > 0 ? `${id}-${count}` : id;
+                    if (uniqueId !== element.id) {
+                        element.id = uniqueId;
+                    }
+                    
+                    extractedHeadings.push({ id: uniqueId, text, level });
+                }
+            });
+
+            setHeadings(extractedHeadings);
+        };
+
+        const timer = setTimeout(() => {
+            requestAnimationFrame(extractHeadings);
+        }, 50);
+        return () => clearTimeout(timer);
+    }, [isContentReady]);
 
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -101,9 +114,7 @@ export function TableOfContents({ className }: TableOfContentsProps) {
         );
     }, [headings, searchQuery]);
 
-    if (headings.length === 0) {
-        return null;
-    }
+    const showSkeleton = !isContentReady || headings.length === 0;
 
     const scrollToHeading = (id: string) => {
         const element = document.getElementById(id);
@@ -122,9 +133,16 @@ export function TableOfContents({ className }: TableOfContentsProps) {
     return (
         <Card className={cn('p-6 w-80 h-[70vh] max-h-[70vh] flex flex-col', className)}>
             <div className="mb-6 shrink-0">
-                <h3 className="text-base font-semibold text-foreground mb-4">
-                    {t('tableOfContents')}
-                </h3>
+                <div className="mb-2">
+                    <div className="text-base font-semibold text-foreground">
+                        {t('tableOfContents')}
+                    </div>
+                    {guideTitle && (
+                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {guideTitle}
+                        </div>
+                    )}
+                </div>
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
@@ -146,7 +164,21 @@ export function TableOfContents({ className }: TableOfContentsProps) {
             </div>
 
             <nav className="flex-1 overflow-y-auto toc-scrollbar min-h-0">
-                {filteredHeadings.length === 0 ? (
+                {showSkeleton ? (
+                    <div className="space-y-2">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className={cn(
+                                    'h-6 bg-muted animate-pulse rounded',
+                                    i % 3 === 0 && 'w-3/4',
+                                    i % 3 === 1 && 'w-5/6 ml-6',
+                                    i % 3 === 2 && 'w-2/3 ml-9'
+                                )}
+                            />
+                        ))}
+                    </div>
+                ) : filteredHeadings.length === 0 ? (
                     <div className="text-center py-8">
                         <p className="text-sm text-muted-foreground">{t('noChaptersFound')}</p>
                     </div>
@@ -162,7 +194,7 @@ export function TableOfContents({ className }: TableOfContentsProps) {
                                             scrollToHeading(heading.id);
                                         }}
                                         className={cn(
-                                            'block text-sm transition-all rounded-md px-3 py-2 text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                                            'no-gradient block text-sm transition-all rounded-md px-3 py-2 hover:bg-accent/50 text-foreground hover:text-foreground',
                                             heading.level === 2 && 'pl-3 font-semibold',
                                             heading.level === 3 && 'pl-6',
                                             heading.level === 4 && 'pl-9'

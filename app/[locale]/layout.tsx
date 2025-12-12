@@ -162,6 +162,8 @@ export default async function LocaleLayout({
         notFound();
     }
 
+    const christmasMode = process.env.NEXT_PUBLIC_CHRISTMAS_MODE === 'true';
+
     return (
         <>
             <script
@@ -171,8 +173,36 @@ export default async function LocaleLayout({
                         (function() {
                             try {
                                 document.documentElement.lang = '${locale}';
+                                
+                                const storedTheme = localStorage.getItem('theme');
+                                let theme = storedTheme || 'system';
+                                let effectiveTheme = theme;
+                                
+                                if (theme === 'system') {
+                                    effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                                }
+                                
+                                if (!document.documentElement.classList.contains('light') && !document.documentElement.classList.contains('dark')) {
+                                    document.documentElement.classList.add(effectiveTheme);
+                                    
+                                    if (effectiveTheme === 'dark') {
+                                        document.documentElement.style.backgroundColor = '#000000';
+                                        document.documentElement.style.color = '#ffffff';
+                                    } else {
+                                        document.documentElement.style.backgroundColor = '#ffffff';
+                                        document.documentElement.style.color = '#000000';
+                                    }
+                                }
+                                
+                                window.__CHRISTMAS_MODE__ = ${christmasMode};
                             } catch (e) {
                                 document.documentElement.lang = '${locale}';
+                                if (!document.documentElement.classList.contains('light') && !document.documentElement.classList.contains('dark')) {
+                                    document.documentElement.classList.add('light');
+                                    document.documentElement.style.backgroundColor = '#ffffff';
+                                    document.documentElement.style.color = '#000000';
+                                }
+                                window.__CHRISTMAS_MODE__ = false;
                             }
                         })();
                     `
